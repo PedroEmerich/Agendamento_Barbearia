@@ -39,7 +39,8 @@ export default function Login() {
         {MODO_DEMO && (
           <p className="rounded-2xl border border-gold-400/20 bg-gold-400/10 px-4 py-3 text-xs leading-relaxed text-gold-200">
             Demonstração: <strong>admin / demo</strong> vê todos os barbeiros;{' '}
-            <strong>renato / demo</strong> vê só a própria agenda.
+            <strong>renato</strong>, <strong>davi</strong> ou <strong>renan</strong> (senha{' '}
+            <strong>demo</strong>) entram como o barbeiro.
           </p>
         )}
         <div>
