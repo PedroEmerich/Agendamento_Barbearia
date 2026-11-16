@@ -30,6 +30,7 @@ import {
   cicloDoMes,
   encaixarNaAgenda,
   gerarHorariosDoPlano,
+  horasFixasLivres,
   JANELA_ASSINANTE_DIAS,
   mesDe,
   usoNoMes,
@@ -303,6 +304,7 @@ function carregar(): Registro[] {
     hoje: agora.data,
     agoraMin: agora.minutos,
     simularUso: assinaturasDeExemplo(agora.data).map((a) => a.id),
+    ocupadosExternos: salvo.criados.filter((r) => !r.assinatura_id && r.status !== 'CANCELADO'),
   });
   const agenda = encaixarNaAgenda(semente, doPlano);
   for (const r of agenda) {
@@ -680,6 +682,21 @@ const acoes: Record<string, (p: Payload, authToken?: string | null) => unknown> 
 
   listarPlanos: () => PLANOS,
 
+  /** Horários que ainda podem ser dia fixo (para a tela de contratação). */
+  horariosFixosLivres: (p) => {
+    carregar();
+    return horasFixasLivres({
+      assinaturas: assinaturasMem,
+      planos: PLANOS,
+      servicos: SERVICOS,
+      expediente: EXPEDIENTE,
+      planoId: String(p.planoId),
+      barbeiroId: String(p.barbeiroId),
+      diaSemana: Number(p.diaSemana),
+      intervaloMin: CONFIG.intervalo_slot_min,
+    });
+  },
+
   /** Contratação do plano pelo próprio cliente (página /assinar). Ativa após o pagamento. */
   contratarPlano: (p) => {
     const nome = String(p.clienteNome ?? '').trim();
@@ -703,6 +720,23 @@ const acoes: Record<string, (p: Payload, authToken?: string | null) => unknown> 
         (ini < dia.pausa.fim && dia.pausa.inicio < fim)
       ) {
         throw new ErroApi('VALIDACAO', 'Esse horário fica fora do expediente.');
+      }
+      carregar();
+      const livres = horasFixasLivres({
+        assinaturas: assinaturasMem,
+        planos: PLANOS,
+        servicos: SERVICOS,
+        expediente: EXPEDIENTE,
+        planoId: String(p.planoId),
+        barbeiroId: String(p.barbeiroId),
+        diaSemana: fixo.dia_semana,
+        intervaloMin: CONFIG.intervalo_slot_min,
+      });
+      if (!livres.includes(fixo.hora)) {
+        throw new ErroApi(
+          'SLOT_INDISPONIVEL',
+          'Esse dia fixo já é de outro assinante. Escolha outro horário.',
+        );
       }
     }
     const hoje = agoraSP().data;

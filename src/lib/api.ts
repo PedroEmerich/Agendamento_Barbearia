@@ -116,6 +116,8 @@ export const api = {
   getHorarios: (servicoId: string, barbeiroId: string, data: string, assinaturaToken?: string) =>
     chamar<Horario[]>('getHorarios', { servicoId, barbeiroId, data, assinaturaToken }),
   listarPlanos: () => chamar<Plano[]>('listarPlanos'),
+  horariosFixosLivres: (planoId: string, barbeiroId: string, diaSemana: number) =>
+    chamar<string[]>('horariosFixosLivres', { planoId, barbeiroId, diaSemana }),
   contratarPlano: (dados: NovaAssinatura) =>
     chamar<{ token: string }>('contratarPlano', { ...dados }),
 
