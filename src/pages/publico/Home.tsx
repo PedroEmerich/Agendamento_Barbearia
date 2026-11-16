@@ -438,7 +438,6 @@ const VANTAGENS = [
 
 function Planos() {
   const planos = useConsulta(api.listarPlanos, []);
-  const config = useConsulta(api.getConfigPublica, []);
   const destaque = 'p2';
   return (
     <section id="planos" className="relative scroll-mt-20 overflow-hidden py-16 sm:py-32">
@@ -464,7 +463,6 @@ function Planos() {
           {planos.carregando && <Skeletons n={3} className="h-96" />}
           {planos.dados?.map((p, i) => {
             const top = p.id === destaque;
-            const msg = encodeURIComponent(`Olá! Quero assinar o ${p.nome} da Underground.`);
             return (
               <Revelar como="li" key={p.id} atraso={i * 100} className="min-w-0">
                 <Inclinar
@@ -514,27 +512,21 @@ function Planos() {
                       </li>
                     ))}
                   </ul>
-                  <a
-                    href={
-                      config.dados
-                        ? `https://wa.me/${config.dados.telefone_contato}?text=${msg}`
-                        : '#'
-                    }
-                    target="_blank"
-                    rel="noreferrer"
+                  <Link
+                    to={`/assinar/${p.id}`}
                     data-cursor="Assinar"
                     className={`${top ? 'btn-gold' : 'btn-ghost'} mt-8 w-full`}
                   >
                     Quero assinar
-                  </a>
+                  </Link>
                 </Inclinar>
               </Revelar>
             );
           })}
         </ul>
         <p className="mt-6 text-center text-xs text-zinc-500">
-          A assinatura é feita direto com a barbearia pelo WhatsApp. Depois você recebe o link do
-          seu plano.
+          Pague online (Pix ou cartão, cobrança mensal automática) ou na barbearia. Depois você
+          recebe o link do seu plano.
         </p>
       </div>
     </section>

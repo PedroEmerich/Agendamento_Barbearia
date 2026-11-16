@@ -7,6 +7,7 @@ import Agendar from '../pages/publico/Agendar';
 import MeuAgendamento from '../pages/publico/MeuAgendamento';
 import Privacidade from '../pages/publico/Privacidade';
 import MinhaAssinatura from '../pages/publico/MinhaAssinatura';
+import Assinar from '../pages/publico/Assinar';
 import Login from '../pages/admin/Login';
 import Agenda from '../pages/admin/Agenda';
 import Inicio from '../pages/admin/Inicio';
@@ -187,6 +188,7 @@ export default function App() {
           <Route path="/meu-agendamento/:token" element={<MeuAgendamento />} />
           <Route path="/privacidade" element={<Privacidade />} />
           <Route path="/assinatura/:token" element={<MinhaAssinatura />} />
+          <Route path="/assinar/:planoId?" element={<Assinar />} />
           <Route
             path="*"
             element={

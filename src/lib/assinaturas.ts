@@ -82,8 +82,13 @@ export function gerarHorariosDoPlano(opcoes: {
   expediente: Record<number, Jornada | undefined>;
   hoje: string;
   agoraMin: number;
+  /**
+   * Assinaturas de exemplo cujo uso (sem dia fixo) é simulado na demonstração.
+   * Assinaturas reais sem dia fixo não ganham horários inventados: o cliente marca.
+   */
+  simularUso?: string[];
 }): RegistroSemente[] {
-  const { assinaturas, planos, servicos, expediente, hoje, agoraMin } = opcoes;
+  const { assinaturas, planos, servicos, expediente, hoje, agoraMin, simularUso = [] } = opcoes;
   const fim = somarDias(hoje, RESERVA_FIXOS_DIAS);
   const registros: RegistroSemente[] = [];
   const ocupado = (barbeiro: string, data: string, ini: number, f: number) =>
@@ -146,11 +151,17 @@ export function gerarHorariosDoPlano(opcoes: {
       while (diaSemana(d) !== a.fixo.dia_semana) d = somarDias(d, 1);
       const ini = hhmmParaMin(a.fixo.hora);
       for (; d <= limite; d = somarDias(d, 7)) {
-        if (!expediente[diaSemana(d)]) continue;
+        const jornadaDia = expediente[diaSemana(d)];
+        if (!jornadaDia) continue;
+        const cabe =
+          ini >= jornadaDia.jornada.inicio &&
+          ini + servico.duracao_min <= jornadaDia.jornada.fim &&
+          !sobrepoe({ inicio: ini, fim: ini + servico.duracao_min }, jornadaDia.pausa);
+        if (!cabe) continue;
         if ((porMes.get(mesDe(d)) ?? 0) >= plano.creditos_mes) continue;
         if (!ocupado(a.barbeiro_id, d, ini, ini + servico.duracao_min)) criar(d, ini);
       }
-    } else {
+    } else if (simularUso.includes(a.id)) {
       // Sem dia fixo: usa os créditos em dias variados do mês (histórico e próximos dias).
       for (
         let mesIni = `${a.inicio.slice(0, 7)}-01`;

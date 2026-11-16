@@ -4,7 +4,85 @@ import { ErroCaixa, FotoBarbeiro, SeloStatus, Skeletons } from '../../components
 import { api, ultimoAgendamento } from '../../lib/api';
 import { formatarDataLonga, formatarPreco } from '../../lib/datas';
 import { useConsulta } from '../../lib/useConsulta';
-import type { AgendamentoCliente } from '../../types';
+import type { AgendamentoCliente, Cobranca } from '../../types';
+import {
+  ESCOLHA_INICIAL,
+  EscolhaPagamento,
+  escolhaValida,
+  PainelPagamento,
+  SeloPagamento,
+  type EscolhaPagamentoValor,
+} from '../../components/Pagamento';
+
+/** Cobrança pendente, ou a opção de pagar online quem ia pagar no balcão. */
+function PagarAgora({
+  agendamento: a,
+  onPago,
+}: {
+  agendamento: AgendamentoCliente;
+  onPago: () => void;
+}) {
+  const pendenteId = a.pagamento?.status === 'PENDENTE' ? a.pagamento.cobranca_id : undefined;
+  const existente = useConsulta(pendenteId ? () => api.consultarPagamento(pendenteId) : null, [
+    pendenteId,
+  ]);
+  const [aberto, setAberto] = useState(a.pagamento?.status === 'PENDENTE');
+  const [escolha, setEscolha] = useState<EscolhaPagamentoValor>({
+    ...ESCOLHA_INICIAL,
+    forma: 'ONLINE',
+  });
+  const [cobranca, setCobranca] = useState<Cobranca | null>(null);
+  const [gerando, setGerando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  const atual = cobranca ?? existente.dados;
+  if (atual) return <PainelPagamento cobranca={atual} onPago={onPago} />;
+  if (existente.carregando) return <div className="skeleton h-40" />;
+
+  if (!aberto) {
+    return (
+      <button className="btn-ghost w-full" onClick={() => setAberto(true)}>
+        Prefere pagar agora? Pix ou cartão
+      </button>
+    );
+  }
+
+  async function gerar() {
+    setGerando(true);
+    setErro(null);
+    try {
+      setCobranca(
+        await api.iniciarPagamento('agendamento', a.token, {
+          metodo: escolha.metodo,
+          cpf: escolha.cpf,
+          email: escolha.email || undefined,
+        }),
+      );
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Não foi possível gerar o pagamento.');
+    } finally {
+      setGerando(false);
+    }
+  }
+
+  return (
+    <div className="card space-y-4 p-5">
+      <EscolhaPagamento valor={escolha} onMudar={(v) => setEscolha({ ...v, forma: 'ONLINE' })} />
+      {erro && (
+        <p role="alert" className="text-sm text-amber-200">
+          {erro}
+        </p>
+      )}
+      <button
+        className="btn-gold w-full"
+        disabled={!escolhaValida(escolha) || gerando}
+        onClick={gerar}
+      >
+        {gerando ? 'Gerando…' : `Pagar ${formatarPreco(a.preco)}`}
+      </button>
+    </div>
+  );
+}
 
 export default function MeuAgendamento() {
   const { token = '' } = useParams();
@@ -75,7 +153,7 @@ export default function MeuAgendamento() {
                   ['Barbeiro', a.barbeiro_nome],
                   ['Dia', formatarDataLonga(a.data)],
                   ['Horário', `${a.hora_inicio} – ${a.hora_fim}`],
-                  ['Valor', formatarPreco(a.preco)],
+                  ['Valor', a.assinatura_token ? 'Coberto pelo plano' : formatarPreco(a.preco)],
                 ].map(([rotulo, valor]) => (
                   <div key={rotulo} className="flex justify-between gap-4">
                     <dt className="text-zinc-400">{rotulo}</dt>
@@ -83,7 +161,22 @@ export default function MeuAgendamento() {
                   </div>
                 ))}
               </dl>
+              {a.pagamento && (
+                <div className="mt-4 flex items-center justify-between border-t border-white/[0.07] pt-4 text-sm">
+                  <span className="text-zinc-400">Pagamento</span>
+                  <SeloPagamento pagamento={a.pagamento} />
+                </div>
+              )}
             </div>
+
+            {ativo &&
+              a.pagamento &&
+              a.pagamento.status !== 'PAGO' &&
+              a.pagamento.status !== 'ESTORNADO' && (
+                <div className="mt-4">
+                  <PagarAgora agendamento={a} onPago={() => consulta.recarregar()} />
+                </div>
+              )}
 
             {erro && (
               <p role="alert" className="mt-4 text-sm text-red-300">
