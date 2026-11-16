@@ -178,7 +178,7 @@ function Hero() {
       >
         <p className="eyebrow animate-entrar justify-center before:hidden">Mogi das Cruzes · SP</p>
 
-        <div ref={titulo} className="relative mt-8 select-none" aria-hidden="true">
+        <div ref={titulo} data-marca className="relative mt-8 select-none" aria-hidden="true">
           {/* Leão: entra com zoom, tem um halo pulsando e acompanha o mouse de leve */}
           <div className="relative mx-auto w-[clamp(6.5rem,19vh,11rem)] animate-entrar [animation-delay:100ms]">
             <div className="absolute inset-[-30%] animate-pulse rounded-full bg-gold-400/25 blur-3xl [animation-duration:4s]" />
@@ -771,6 +771,7 @@ export default function Home() {
             width={900}
             height={635}
             loading="lazy"
+            data-marca
             className="w-44"
           />
           {c && (
