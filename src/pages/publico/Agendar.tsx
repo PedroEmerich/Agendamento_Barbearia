@@ -49,7 +49,7 @@ function Opcao({
 function Confirmacao({ agendamento }: { agendamento: AgendamentoCliente }) {
   const config = useConsulta(api.getConfigPublica, []);
   const [copiado, setCopiado] = useState(false);
-  const link = `${window.location.origin}/meu-agendamento/${agendamento.token}`;
+  const link = `${window.location.origin}${import.meta.env.BASE_URL}meu-agendamento/${agendamento.token}`;
 
   async function copiar() {
     try {
