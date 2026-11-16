@@ -167,7 +167,7 @@ export default function Assinar() {
       <form onSubmit={enviar} className="mt-8 space-y-10" noValidate>
         <section className="space-y-4">
           {passoTitulo(1, 'Plano')}
-          <div role="radiogroup" aria-label="Plano" className="grid gap-3 sm:grid-cols-3">
+          <div role="radiogroup" aria-label="Plano" className="grid grid-cols-3 gap-2.5 sm:gap-3">
             {planos.carregando && <Skeletons n={3} className="h-28" />}
             {planos.dados?.map((p) => (
               <button
@@ -179,17 +179,20 @@ export default function Assinar() {
                   setPlanoId(p.id);
                   setHora(null);
                 }}
-                className={`card cursor-pointer p-4 text-left transition ${planoId === p.id ? '!border-gold-400/70 !bg-gold-400/[0.08]' : 'hover:border-white/20'}`}
+                className={`card cursor-pointer p-3 text-left sm:p-4 transition ${planoId === p.id ? '!border-gold-400/70 !bg-gold-400/[0.08]' : 'hover:border-white/20'}`}
               >
-                <span className="block font-semibold text-zinc-50">
+                <span className="block text-sm leading-snug font-semibold text-zinc-50 sm:text-base">
                   {p.nome.replace('Plano ', '')}
                 </span>
-                <span className="mt-1 block font-display text-2xl font-bold text-gold-200">
-                  {formatarPreco(p.preco_mensal)}
+                <span className="mt-1 block font-display text-xl font-bold text-gold-200 sm:text-2xl">
+                  {formatarPreco(p.preco_mensal).replace(',00', '')}
                 </span>
-                <span className="text-xs text-zinc-500">
-                  {p.creditos_mes} por mês · economia de{' '}
-                  {formatarPreco(p.preco_avulso_mes - p.preco_mensal)}
+                <span className="text-[0.7rem] text-zinc-500 sm:text-xs">
+                  {p.creditos_mes} por mês
+                  <span className="hidden sm:inline">
+                    {' '}
+                    · economia de {formatarPreco(p.preco_avulso_mes - p.preco_mensal)}
+                  </span>
                 </span>
               </button>
             ))}

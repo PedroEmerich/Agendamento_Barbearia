@@ -184,7 +184,8 @@ export default function MeuAgendamento() {
               </p>
             )}
 
-            <div className="mt-6 flex flex-col gap-3">
+            {/* Ações lado a lado; avisos e confirmação ocupam a linha toda. */}
+            <div className="mt-6 grid grid-cols-2 gap-3">
               {ativo && !confirmando && (
                 <>
                   <button
@@ -196,7 +197,7 @@ export default function MeuAgendamento() {
                     Cancelar horário
                   </button>
                   {!a.pode_cancelar && (
-                    <p id="prazo" className="text-center text-xs text-zinc-400">
+                    <p id="prazo" className="col-span-2 text-center text-xs text-zinc-400">
                       O cancelamento pelo site vai até {horasPrazo}h antes do horário.{' '}
                       {config.dados && (
                         <a
@@ -211,7 +212,7 @@ export default function MeuAgendamento() {
                 </>
               )}
               {confirmando && (
-                <div className="card !border-red-500/30 p-5 text-center">
+                <div className="card col-span-2 !border-red-500/30 p-5 text-center">
                   <p className="text-sm">
                     Cancelar mesmo? O horário volta a ficar livre para outros clientes.
                   </p>
