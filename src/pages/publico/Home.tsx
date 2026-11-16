@@ -225,14 +225,21 @@ function Hero() {
           seu horário em menos de um minuto.
         </p>
 
-        <div className="mt-8 flex animate-entrar flex-col items-center sm:mt-10 justify-center gap-3 [animation-delay:1000ms] sm:flex-row">
+        <div className="mt-8 flex animate-entrar flex-row flex-wrap items-center justify-center gap-2 [animation-delay:1000ms] sm:mt-10 sm:gap-3">
           <Magnetico>
-            <Link to="/agendar" className="btn-gold px-9 py-4 text-base" data-cursor="Bora">
+            <Link
+              to="/agendar"
+              className="btn-gold px-4 py-3.5 text-sm whitespace-nowrap min-[380px]:px-5 sm:px-9 sm:py-4 sm:text-base"
+              data-cursor="Bora"
+            >
               Agendar horário <IconeSeta />
             </Link>
           </Magnetico>
           <Magnetico forca={0.2}>
-            <a href="#servicos" className="btn-ghost px-7 py-4 text-base">
+            <a
+              href="#servicos"
+              className="btn-ghost px-4 py-3.5 text-sm whitespace-nowrap min-[380px]:px-5 sm:px-7 sm:py-4 sm:text-base"
+            >
               Ver serviços
             </a>
           </Magnetico>
@@ -261,7 +268,7 @@ function Hero() {
         <ProximoHorario />
       </div>
       <SeloGiratorio
-        texto="Agende online ✦ Sem cadastro ✦ "
+        texto="Agende online ✦ Em segundos ✦ "
         className="absolute right-8 bottom-10 hidden h-32 w-32 lg:flex"
       />
 
@@ -303,7 +310,8 @@ function Servicos() {
           </Revelar>
         </div>
 
-        <ul className="space-y-3">
+        {/* Celular: grade de 2 colunas (o último ocupa a linha toda se sobrar). */}
+        <ul className="grid grid-cols-2 gap-3 sm:block sm:space-y-3 [&>li:last-child:nth-child(odd)]:col-span-2">
           {servicos.erro && <ErroCaixa mensagem={servicos.erro} onTentar={servicos.recarregar} />}
           {servicos.carregando && <Skeletons n={5} className="h-28" />}
           {servicos.dados?.map((s, i) => (
@@ -312,21 +320,25 @@ function Servicos() {
                 <Link
                   to={`/agendar?servico=${s.id}`}
                   data-cursor="Agendar"
-                  className="flex items-center gap-4 p-5 sm:gap-6 sm:p-6"
+                  className="flex h-full flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-6 sm:p-6"
                 >
                   <span className="texto-contorno hidden font-display text-4xl font-black sm:block">
                     {String(i + 1).padStart(2, '0')}
                   </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-baseline justify-between gap-3">
-                      <span className="text-lg font-semibold text-zinc-50">{s.nome}</span>
-                      <span className="shrink-0 font-display text-xl font-bold text-gold-200 sm:hidden">
-                        {formatarPreco(s.preco)}
-                      </span>
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="text-base leading-snug font-semibold text-zinc-50 sm:text-lg">
+                      {s.nome}
                     </span>
-                    <span className="mt-1 block text-sm text-zinc-400">{s.descricao}</span>
-                    <span className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs text-zinc-300">
-                      <IconeRelogio width={13} height={13} /> {formatarDuracao(s.duracao_min)}
+                    <span className="mt-1 line-clamp-2 text-xs text-zinc-400 sm:line-clamp-none sm:text-sm">
+                      {s.descricao}
+                    </span>
+                    <span className="mt-auto flex items-center justify-between gap-2 pt-3">
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs text-zinc-300">
+                        <IconeRelogio width={13} height={13} /> {formatarDuracao(s.duracao_min)}
+                      </span>
+                      <span className="font-display text-lg font-bold text-gold-200 sm:hidden">
+                        {formatarPreco(s.preco).replace(',00', '')}
+                      </span>
                     </span>
                   </span>
                   <span className="hidden shrink-0 flex-col items-end gap-2 sm:flex">
@@ -371,7 +383,7 @@ function Equipe() {
           primeiro horário livre.
         </Cabeca>
 
-        <ul className="mt-10 grid gap-3 sm:mt-16 sm:grid-cols-3 sm:gap-6">
+        <ul className="mt-10 grid grid-cols-3 gap-2.5 sm:mt-16 sm:gap-6">
           {barbeiros.carregando && <Skeletons n={3} className="h-96" />}
           {barbeiros.dados?.map((b, i) => (
             <Revelar
@@ -384,29 +396,29 @@ function Equipe() {
                 <Link
                   to={`/agendar?barbeiro=${b.id}`}
                   data-cursor={`Com ${b.nome}`}
-                  className="flex h-full items-center gap-5 p-5 sm:flex-col sm:gap-0 sm:px-6 sm:pt-10 sm:pb-8 sm:text-center"
+                  className="flex h-full flex-col items-center px-2 pt-6 pb-5 text-center sm:px-6 sm:pt-10 sm:pb-8"
                 >
                   <span className="relative">
                     <span
                       aria-hidden="true"
-                      className="absolute -inset-2 rounded-full border border-dashed sm:-inset-3 border-gold-400/30 transition duration-700 group-hover:rotate-180 group-hover:border-gold-300/70"
+                      className="absolute -inset-1.5 rounded-full border border-dashed sm:-inset-3 border-gold-400/30 transition duration-700 group-hover:rotate-180 group-hover:border-gold-300/70"
                     />
                     <FotoBarbeiro
                       nome={b.nome}
                       foto={b.foto_url}
-                      tamanho="h-24 w-24 sm:h-36 sm:w-36 lg:h-44 lg:w-44"
+                      tamanho="h-20 w-20 sm:h-36 sm:w-36 lg:h-44 lg:w-44"
                       className="transition duration-700 group-hover:scale-[1.04]"
                     />
                   </span>
-                  <span className="flex min-w-0 flex-col sm:items-center">
-                    <span className="font-display text-2xl font-bold text-zinc-50 sm:mt-8 sm:text-3xl">
+                  <span className="flex w-full min-w-0 flex-col items-center">
+                    <span className="mt-4 font-display text-lg font-bold text-zinc-50 sm:mt-8 sm:text-3xl">
                       {b.nome}
                     </span>
-                    <span className="mt-1 text-xs tracking-[0.3em] text-gold-400 uppercase">
+                    <span className="mt-1 text-[0.6rem] tracking-[0.25em] text-gold-400 uppercase sm:text-xs sm:tracking-[0.3em]">
                       Barbeiro
                     </span>
                     {b.instagram && (
-                      <span className="mt-1.5 flex max-w-full min-w-0 items-center gap-1.5 text-sm text-zinc-400 sm:mt-3">
+                      <span className="mt-3 hidden max-w-full min-w-0 items-center gap-1.5 text-sm text-zinc-400 sm:flex">
                         <IconeInstagram width={15} height={15} className="shrink-0" />
                         <span className="truncate">@{b.instagram}</span>
                       </span>
@@ -459,12 +471,18 @@ function Planos() {
           para trocar quando precisar.
         </Cabeca>
 
-        <ul className="mt-12 grid items-stretch gap-4 md:grid-cols-3">
+        {/* Celular: carrossel lado a lado (desliza); computador: 3 colunas. */}
+        <ul className="sem-barra -mx-4 mt-10 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pt-4 pb-4 md:mx-0 md:mt-12 md:grid md:grid-cols-3 md:items-stretch md:gap-4 md:overflow-visible md:px-0">
           {planos.carregando && <Skeletons n={3} className="h-96" />}
           {planos.dados?.map((p, i) => {
             const top = p.id === destaque;
             return (
-              <Revelar como="li" key={p.id} atraso={i * 100} className="min-w-0">
+              <Revelar
+                como="li"
+                key={p.id}
+                atraso={i * 100}
+                className="w-[82%] max-w-80 min-w-0 shrink-0 snap-center md:w-auto md:max-w-none"
+              >
                 <Inclinar
                   graus={4}
                   className={`card group relative flex h-full flex-col p-7 ${top ? '!border-gold-400/60 shadow-[0_0_60px_-20px_#d4a94e]' : ''}`}
@@ -524,6 +542,9 @@ function Planos() {
             );
           })}
         </ul>
+        <p className="mt-2 text-center text-xs text-zinc-500 md:hidden">
+          Deslize para ver os planos →
+        </p>
         <p className="mt-6 text-center text-xs text-zinc-500">
           Pague online (Pix ou cartão, cobrança mensal automática) ou na barbearia. Depois você
           recebe o link do seu plano.
@@ -584,8 +605,8 @@ function Espaco() {
         para o relógio.
       </Cabeca>
 
-      <div className="mt-10 grid auto-rows-[minmax(11rem,auto)] gap-3 sm:mt-14 sm:gap-4 md:auto-rows-[minmax(13rem,auto)] md:grid-cols-6">
-        <Revelar className="md:col-span-4">
+      <div className="mt-10 grid auto-rows-[minmax(9.5rem,auto)] grid-cols-2 gap-3 sm:mt-14 sm:gap-4 md:auto-rows-[minmax(13rem,auto)] md:grid-cols-6">
+        <Revelar className="col-span-2 md:col-span-4">
           <Inclinar graus={3} className="card group relative h-full overflow-hidden p-6 sm:p-8">
             <span
               aria-hidden="true"
@@ -596,14 +617,16 @@ function Espaco() {
               </span>
             </span>
             <p className="eyebrow">Enquanto espera</p>
-            <p className="mt-4 font-display text-5xl font-black text-zinc-50 sm:text-6xl">Sinuca</p>
+            <p className="mt-3 font-display text-4xl font-black text-zinc-50 sm:mt-4 sm:text-6xl">
+              Sinuca
+            </p>
             <p className="mt-3 max-w-[62%] text-zinc-400 sm:max-w-xs">
               Mesa liberada para quem chega. Desafie o barbeiro — se tiver coragem.
             </p>
           </Inclinar>
         </Revelar>
-        <Revelar className="md:col-span-2" atraso={100}>
-          <Inclinar graus={5} className="card relative h-full overflow-hidden p-6 sm:p-8">
+        <Revelar className="col-span-1 md:col-span-2" atraso={100}>
+          <Inclinar graus={5} className="card relative h-full overflow-hidden p-4 sm:p-8">
             <span
               aria-hidden="true"
               className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-amber-500/20 to-transparent"
@@ -618,21 +641,23 @@ function Espaco() {
               ))}
             </span>
             <p className="eyebrow">Por conta da casa</p>
-            <p className="mt-4 font-display text-4xl font-black text-zinc-50">
+            <p className="mt-3 font-display text-2xl leading-tight font-black text-zinc-50 sm:mt-4 sm:text-4xl">
               Cerveja <span className="texto-ouro">gelada</span>
             </p>
           </Inclinar>
         </Revelar>
-        <Revelar className="md:col-span-3" atraso={150}>
-          <Inclinar graus={4} className="card h-full overflow-hidden p-6 sm:p-8">
+        <Revelar className="col-span-1 md:col-span-3" atraso={150}>
+          <Inclinar graus={4} className="card h-full overflow-hidden p-4 sm:p-8">
             <p className="eyebrow">Sem rótulo</p>
-            <p className="mt-4 font-display text-4xl font-black text-zinc-50">Todas as tribos</p>
-            <div className="mt-6 flex flex-wrap gap-2">
+            <p className="mt-3 font-display text-2xl leading-tight font-black text-zinc-50 sm:mt-4 sm:text-4xl">
+              Todas as tribos
+            </p>
+            <div className="mt-4 flex flex-wrap gap-1.5 sm:mt-6 sm:gap-2">
               {['Social', 'Degradê', 'Navalhado', 'Clássico', 'Freestyle', 'Barba de respeito'].map(
                 (t) => (
                   <span
                     key={t}
-                    className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-sm text-zinc-300 transition hover:border-gold-400/50 hover:text-gold-200"
+                    className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[0.7rem] text-zinc-300 transition hover:border-gold-400/50 hover:text-gold-200 sm:px-3 sm:py-1 sm:text-sm"
                   >
                     {t}
                   </span>
@@ -641,19 +666,24 @@ function Espaco() {
             </div>
           </Inclinar>
         </Revelar>
-        <Revelar className="md:col-span-3" atraso={200}>
+        <Revelar className="col-span-2 md:col-span-3" atraso={200}>
           <Inclinar
             graus={4}
-            className="card flex h-full flex-col justify-between overflow-hidden p-6 sm:p-8"
+            className="card flex h-full flex-row items-end justify-between gap-4 overflow-hidden p-5 sm:flex-col sm:items-stretch sm:p-8"
           >
             <div>
               <p className="eyebrow">Sem ligação</p>
-              <p className="mt-4 font-display text-4xl font-black text-zinc-50">
+              <p className="mt-3 font-display text-3xl font-black text-zinc-50 sm:mt-4 sm:text-4xl">
                 Agenda <span className="texto-ouro">24h</span>
               </p>
-              <p className="mt-3 text-zinc-400">E lembrete no WhatsApp duas horas antes.</p>
+              <p className="mt-2 text-sm text-zinc-400 sm:mt-3 sm:text-base">
+                E lembrete no WhatsApp duas horas antes.
+              </p>
             </div>
-            <Link to="/agendar" className="btn-gold mt-6 self-start">
+            <Link
+              to="/agendar"
+              className="btn-gold shrink-0 self-end whitespace-nowrap sm:mt-6 sm:self-start"
+            >
               Marcar agora <IconeSeta />
             </Link>
           </Inclinar>
@@ -666,7 +696,10 @@ function Espaco() {
 /* -------------------------------------------------------- como funciona */
 
 const PASSOS = [
-  { titulo: 'Escolha', texto: 'Serviço, barbeiro, dia e horário. Sem cadastro, sem senha.' },
+  {
+    titulo: 'Escolha',
+    texto: 'Serviço, barbeiro, dia e horário. A conta é criada no último passo.',
+  },
   { titulo: 'Receba o lembrete', texto: 'Cerca de 2 horas antes chega um aviso no seu WhatsApp.' },
   { titulo: 'Confirme com um toque', texto: 'Imprevisto? Cancele pelo link e libere o horário.' },
 ];
@@ -819,16 +852,16 @@ function Local() {
                 ))}
               </dl>
             </div>
-            <div className="flex flex-wrap gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:flex">
               <a
                 href={`https://wa.me/${c.telefone_contato}`}
                 target="_blank"
                 rel="noreferrer"
-                className="btn-ghost"
+                className="btn-ghost px-4"
               >
                 <IconeWhatsapp /> WhatsApp
               </a>
-              <a href={c.instagram_url} target="_blank" rel="noreferrer" className="btn-ghost">
+              <a href={c.instagram_url} target="_blank" rel="noreferrer" className="btn-ghost px-4">
                 <IconeInstagram /> Instagram
               </a>
             </div>

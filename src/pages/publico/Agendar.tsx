@@ -736,7 +736,7 @@ export default function Agendar() {
                 {barbeiros.erro && (
                   <ErroCaixa mensagem={barbeiros.erro} onTentar={barbeiros.recarregar} />
                 )}
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
                   {barbeiros.carregando && <Skeletons n={3} className="h-60" />}
                   {barbeiros.dados?.map((b) => (
                     <CartaoBarbeiro
@@ -970,7 +970,7 @@ function CartaoBarbeiro({
         onClick={onClick}
         aria-pressed={selecionado}
         data-cursor="Escolher"
-        className="flex w-full cursor-pointer items-center gap-4 p-4 text-left sm:flex-col sm:px-4 sm:pt-7 sm:pb-6 sm:text-center"
+        className="flex w-full cursor-pointer flex-col items-center gap-3 px-2 pt-5 pb-4 text-center sm:px-4 sm:pt-7 sm:pb-6"
       >
         <span className="relative">
           <FotoBarbeiro
@@ -986,11 +986,13 @@ function CartaoBarbeiro({
           )}
         </span>
         <span>
-          <span className="block font-display text-xl font-bold text-zinc-50 sm:text-2xl">
+          <span className="block font-display text-lg font-bold text-zinc-50 sm:text-2xl">
             {b.nome}
           </span>
           {b.instagram && (
-            <span className="mt-0.5 block truncate text-xs text-zinc-500">@{b.instagram}</span>
+            <span className="mt-0.5 hidden truncate text-xs text-zinc-500 sm:block">
+              @{b.instagram}
+            </span>
           )}
         </span>
       </button>
