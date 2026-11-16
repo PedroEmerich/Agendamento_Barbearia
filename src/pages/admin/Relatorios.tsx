@@ -14,7 +14,7 @@ import {
   resumir,
 } from '../../lib/relatorios';
 import { useConsulta } from '../../lib/useConsulta';
-import { FiltroBarbeiro, IconeDownload, Segmentado, usePainel } from './painel';
+import { FiltroBarbeiro, IconeDownload, SeloPlano, Segmentado, usePainel } from './painel';
 
 type Preset = 'semana' | 'mes' | 'mes-passado' | 'tres-meses' | 'personalizado';
 
@@ -99,7 +99,7 @@ export default function Relatorios() {
 
   const tiles: [string, string, string?][] = [
     ['Agendamentos', String(r.total), `${r.pendentes} a realizar`],
-    ['Concluídos', String(r.concluidos)],
+    ['Concluídos', String(r.concluidos), `${r.doPlano} de plano`],
     [
       'Faturamento',
       formatarPreco(r.faturamento),
@@ -345,7 +345,7 @@ export default function Relatorios() {
                       <SeloStatus status={a.status} />
                     </td>
                     <td className="px-5 py-2.5 text-right text-zinc-100 tabular-nums">
-                      {formatarPreco(a.preco)}
+                      {a.assinatura_id ? <SeloPlano /> : formatarPreco(a.preco)}
                     </td>
                   </tr>
                 ))}

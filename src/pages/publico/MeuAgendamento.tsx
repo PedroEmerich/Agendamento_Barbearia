@@ -136,6 +136,11 @@ export default function MeuAgendamento() {
                   </div>
                 </div>
               )}
+              {a.assinatura_token && (
+                <Link to={`/assinatura/${a.assinatura_token}`} className="btn-gold">
+                  Ver meu plano
+                </Link>
+              )}
               <Link to="/agendar" className={ativo ? 'btn-ghost' : 'btn-gold'}>
                 {ativo ? 'Marcar outro horário' : 'Agendar de novo'}
               </Link>

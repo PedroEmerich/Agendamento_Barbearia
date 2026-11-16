@@ -45,6 +45,23 @@ Entre em `/admin/login` (ou "Área do barbeiro" no rodapé):
 - **Relatórios:** período (semana, mês, mês passado, 3 meses ou datas livres), indicadores, por
   serviço, por dia da semana, por barbeiro e lista completa, com exportação para **PDF** e **Excel**.
 
+### Planos de assinatura
+
+- **Página inicial:** seção "Planos" com os três planos e o botão "Quero assinar" (WhatsApp).
+- **Página do assinante** (`/assinatura/:token`, link pessoal, sem login): créditos do mês, dia fixo,
+  próximos horários e as ações **Trocar / adiantar** (atalho com os horários livres antes do atual),
+  **Não vou** (libera o horário e devolve o crédito) e **usar crédito livre**. A troca reserva o novo
+  horário e libera o antigo numa operação só, então o cliente nunca fica sem horário nem perde crédito.
+- **Painel → Assinantes:** lista com créditos, próximo horário, status de pagamento, link do cliente
+  (abrir, copiar, enviar pelo WhatsApp), pausar/reativar, marcar mês pago e cadastrar assinante.
+- Horários de plano aparecem com o selo **Plano** na agenda e entram nos relatórios (R$ 0 no
+  atendimento; a receita vem da mensalidade).
+- Para testar: Painel → Assinantes → "Página do cliente" (ex.: `/assinatura/assinatura-a1-demo`).
+
+Regras provisórias (`src/lib/assinaturas.ts`), até a barbearia definir: ciclo = mês do calendário,
+créditos não acumulam, falta conta como usado, trocas até 2h antes, assinante agenda até 45 dias à
+frente (público: 21) e os dias fixos ficam reservados 5 semanas antes.
+
 A agenda simulada é gerada em `src/lib/semente.ts`: ~6 meses de histórico com crescimento leve,
 esta semana bem cheia e as próximas mais vazias. É determinística, então recarregar não muda nada;
 mudanças de status e agendamentos feitos pelo site ficam salvos no navegador.
