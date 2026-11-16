@@ -203,7 +203,9 @@ export function FotoBarbeiro({
 /** Selo circular com texto girando em volta. */
 export function SeloGiratorio({ texto, className = '' }: { texto: string; className?: string }) {
   return (
-    <span className={`relative items-center justify-center ${className}`} aria-hidden="true">
+    // Sem "relative" aqui: quem usa decide a posição (no topo da página ele é absolute e
+    // não pode ocupar espaço, senão empurra o conteúdo para o lado).
+    <span className={`items-center justify-center ${className}`} aria-hidden="true">
       <svg viewBox="0 0 120 120" className="absolute inset-0 h-full w-full animate-girar">
         <defs>
           <path id="selo-circulo" d="M60,60 m-46,0 a46,46 0 1,1 92,0 a46,46 0 1,1 -92,0" />

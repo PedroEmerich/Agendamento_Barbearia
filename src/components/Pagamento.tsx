@@ -42,7 +42,7 @@ function Cartao({
       role="radio"
       aria-checked={ativo}
       onClick={onClick}
-      className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-4 text-left transition ${
+      className={`flex cursor-pointer items-start gap-2.5 rounded-2xl border p-3 text-left transition sm:gap-3 sm:p-4 ${
         ativo
           ? 'border-gold-400/70 bg-gold-400/[0.08]'
           : 'border-white/10 bg-white/[0.02] hover:border-white/25'
@@ -58,7 +58,7 @@ function Cartao({
       </span>
       <span>
         <span className="block font-semibold text-zinc-50">{titulo}</span>
-        <span className="mt-0.5 block text-sm text-zinc-400">{texto}</span>
+        <span className="mt-0.5 block text-xs text-zinc-400 sm:text-sm">{texto}</span>
       </span>
     </button>
   );
@@ -79,7 +79,7 @@ export function EscolhaPagamento({
   return (
     <fieldset className="space-y-3">
       <legend className="mb-2 text-sm font-medium text-zinc-200">Pagamento</legend>
-      <div role="radiogroup" aria-label="Forma de pagamento" className="grid gap-2 sm:grid-cols-2">
+      <div role="radiogroup" aria-label="Forma de pagamento" className="grid grid-cols-2 gap-2">
         <Cartao
           ativo={valor.forma === 'NA_BARBEARIA'}
           onClick={() => onMudar({ ...valor, forma: 'NA_BARBEARIA' })}
