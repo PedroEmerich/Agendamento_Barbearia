@@ -54,7 +54,7 @@ function Cabeca({
         <p className="eyebrow">{eyebrow}</p>
       </Revelar>
       <Revelar atraso={80}>
-        <h2 className="titulo mt-4 text-4xl sm:text-5xl">{titulo}</h2>
+        <h2 className="titulo mt-4 text-[2rem] sm:text-5xl">{titulo}</h2>
       </Revelar>
       {children && (
         <Revelar atraso={160}>
@@ -155,10 +155,12 @@ function Hero() {
   }
 
   const sumir = Math.min(1, y / 600);
+  // No celular o conteúdo não se afasta ao rolar: os botões precisam continuar nítidos.
+  const parallax = typeof window !== 'undefined' && matchMedia('(min-width: 1024px)').matches;
   return (
     <section
       onMouseMove={mover}
-      className="relative isolate flex min-h-[100svh] items-center overflow-hidden px-4 pt-28 pb-24"
+      className="relative isolate flex min-h-[100svh] items-center overflow-hidden px-4 pt-20 pb-20 sm:pt-28 sm:pb-24"
     >
       {/* Fundo: grade, orbes e vinheta */}
       <div aria-hidden="true" className="absolute inset-0 -z-10">
@@ -174,13 +176,22 @@ function Hero() {
 
       <div
         className="mx-auto w-full max-w-6xl text-center"
-        style={{ transform: `translate3d(0, ${y * 0.35}px, 0)`, opacity: 1 - sumir * 0.9 }}
+        style={
+          parallax
+            ? { transform: `translate3d(0, ${y * 0.35}px, 0)`, opacity: 1 - sumir * 0.9 }
+            : undefined
+        }
       >
         <p className="eyebrow animate-entrar justify-center before:hidden">Mogi das Cruzes · SP</p>
 
-        <div ref={titulo} data-marca className="relative mt-8 select-none" aria-hidden="true">
+        <div
+          ref={titulo}
+          data-marca
+          className="relative mt-5 select-none sm:mt-8"
+          aria-hidden="true"
+        >
           {/* Leão: entra com zoom, tem um halo pulsando e acompanha o mouse de leve */}
-          <div className="relative mx-auto w-[clamp(6.5rem,19vh,11rem)] animate-entrar [animation-delay:100ms]">
+          <div className="relative mx-auto w-[clamp(5rem,15vh,11rem)] animate-entrar [animation-delay:100ms]">
             <div className="absolute inset-[-30%] animate-pulse rounded-full bg-gold-400/25 blur-3xl [animation-duration:4s]" />
             <img
               src={`${MARCA}leao.webp`}
@@ -194,7 +205,7 @@ function Hero() {
             />
           </div>
           {/* Nome: a camada de cima é a mesma imagem mais clara, revelada onde o cursor está */}
-          <div className="relative mx-auto mt-5 w-[min(90vw,36rem)] animate-entrar [animation-delay:350ms]">
+          <div className="relative mx-auto mt-4 w-[min(84vw,36rem)] sm:mt-5 animate-entrar [animation-delay:350ms]">
             <img src={`${MARCA}nome.webp`} alt="" width={900} height={312} className="w-full" />
             <img
               src={`${MARCA}nome.webp`}
@@ -208,12 +219,12 @@ function Hero() {
         </div>
         <h1 className="sr-only">Underground Barbershop — agendamento online</h1>
 
-        <p className="mx-auto mt-8 max-w-lg animate-entrar text-lg leading-relaxed text-zinc-300 [animation-delay:850ms] sm:text-xl">
+        <p className="mx-auto mt-6 max-w-lg animate-entrar text-base leading-relaxed sm:mt-8 text-zinc-300 [animation-delay:850ms] sm:text-xl">
           A barbearia de <span className="texto-brilho font-semibold">todas as tribos</span>. Marque
           seu horário em menos de um minuto.
         </p>
 
-        <div className="mt-10 flex animate-entrar flex-col items-center justify-center gap-3 [animation-delay:1000ms] sm:flex-row">
+        <div className="mt-8 flex animate-entrar flex-col items-center sm:mt-10 justify-center gap-3 [animation-delay:1000ms] sm:flex-row">
           <Magnetico>
             <Link to="/agendar" className="btn-gold px-9 py-4 text-base" data-cursor="Bora">
               Agendar horário <IconeSeta />
@@ -226,7 +237,7 @@ function Hero() {
           </Magnetico>
         </div>
 
-        <div className="mt-10 flex animate-entrar flex-wrap items-center justify-center gap-3 [animation-delay:1150ms]">
+        <div className="mt-8 flex animate-entrar flex-wrap sm:mt-10 items-center justify-center gap-3 [animation-delay:1150ms]">
           <span className="vidro inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm">
             <span className="flex text-gold-400" aria-hidden="true">
               {Array.from({ length: 5 }, (_, i) => (
@@ -270,7 +281,7 @@ function Hero() {
 function Servicos() {
   const servicos = useConsulta(api.listarServicos, []);
   return (
-    <section id="servicos" className="relative mx-auto max-w-6xl scroll-mt-20 px-4 py-24 sm:py-32">
+    <section id="servicos" className="relative mx-auto max-w-6xl scroll-mt-20 px-4 py-16 sm:py-32">
       <div className="grid gap-12 lg:grid-cols-[1fr_1.5fr] lg:gap-16">
         <div className="lg:sticky lg:top-32 lg:self-start">
           <Cabeca
@@ -306,13 +317,18 @@ function Servicos() {
                     {String(i + 1).padStart(2, '0')}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block text-lg font-semibold text-zinc-50">{s.nome}</span>
+                    <span className="flex items-baseline justify-between gap-3">
+                      <span className="text-lg font-semibold text-zinc-50">{s.nome}</span>
+                      <span className="shrink-0 font-display text-xl font-bold text-gold-200 sm:hidden">
+                        {formatarPreco(s.preco)}
+                      </span>
+                    </span>
                     <span className="mt-1 block text-sm text-zinc-400">{s.descricao}</span>
                     <span className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs text-zinc-300">
                       <IconeRelogio width={13} height={13} /> {formatarDuracao(s.duracao_min)}
                     </span>
                   </span>
-                  <span className="flex shrink-0 flex-col items-end gap-2">
+                  <span className="hidden shrink-0 flex-col items-end gap-2 sm:flex">
                     <span className="font-display text-2xl font-bold text-gold-200">
                       {formatarPreco(s.preco)}
                     </span>
@@ -335,7 +351,7 @@ function Servicos() {
 function Equipe() {
   const barbeiros = useConsulta(() => api.listarBarbeiros(), []);
   return (
-    <section id="equipe" className="relative scroll-mt-20 overflow-hidden py-24 sm:py-32">
+    <section id="equipe" className="relative scroll-mt-20 overflow-hidden py-16 sm:py-32">
       <div
         aria-hidden="true"
         className="absolute inset-x-0 top-1/3 -z-10 h-96 bg-gold-500/10 blur-[140px]"
@@ -354,46 +370,52 @@ function Equipe() {
           primeiro horário livre.
         </Cabeca>
 
-        <ul className="mt-16 grid gap-5 sm:grid-cols-3 sm:gap-6">
+        <ul className="mt-10 grid gap-3 sm:mt-16 sm:grid-cols-3 sm:gap-6">
           {barbeiros.carregando && <Skeletons n={3} className="h-96" />}
           {barbeiros.dados?.map((b, i) => (
             <Revelar
               como="li"
               key={b.id}
               atraso={i * 120}
-              className={i === 1 ? 'sm:translate-y-10' : ''}
+              className={`min-w-0 ${i === 1 ? 'sm:translate-y-10' : ''}`}
             >
               <Inclinar className="card group h-full">
                 <Link
                   to={`/agendar?barbeiro=${b.id}`}
                   data-cursor={`Com ${b.nome}`}
-                  className="flex h-full flex-col items-center px-6 pt-10 pb-8 text-center"
+                  className="flex h-full items-center gap-5 p-5 sm:flex-col sm:gap-0 sm:px-6 sm:pt-10 sm:pb-8 sm:text-center"
                 >
                   <span className="relative">
                     <span
                       aria-hidden="true"
-                      className="absolute -inset-3 rounded-full border border-dashed border-gold-400/30 transition duration-700 group-hover:rotate-180 group-hover:border-gold-300/70"
+                      className="absolute -inset-2 rounded-full border border-dashed sm:-inset-3 border-gold-400/30 transition duration-700 group-hover:rotate-180 group-hover:border-gold-300/70"
                     />
                     <FotoBarbeiro
                       nome={b.nome}
                       foto={b.foto_url}
-                      tamanho="h-40 w-40 sm:h-36 sm:w-36 lg:h-44 lg:w-44"
+                      tamanho="h-24 w-24 sm:h-36 sm:w-36 lg:h-44 lg:w-44"
                       className="transition duration-700 group-hover:scale-[1.04]"
                     />
                   </span>
-                  <span className="mt-8 font-display text-3xl font-bold text-zinc-50">
-                    {b.nome}
-                  </span>
-                  <span className="mt-1 text-xs tracking-[0.3em] text-gold-400 uppercase">
-                    Barbeiro
-                  </span>
-                  {b.instagram && (
-                    <span className="mt-3 inline-flex max-w-full items-center gap-1.5 truncate text-sm text-zinc-400">
-                      <IconeInstagram width={15} height={15} /> @{b.instagram}
+                  <span className="flex min-w-0 flex-col sm:items-center">
+                    <span className="font-display text-2xl font-bold text-zinc-50 sm:mt-8 sm:text-3xl">
+                      {b.nome}
                     </span>
-                  )}
-                  <span className="btn-ghost mt-6 w-full group-hover:border-gold-400/60 group-hover:text-gold-200">
-                    Agendar com {b.nome}
+                    <span className="mt-1 text-xs tracking-[0.3em] text-gold-400 uppercase">
+                      Barbeiro
+                    </span>
+                    {b.instagram && (
+                      <span className="mt-1.5 flex max-w-full min-w-0 items-center gap-1.5 text-sm text-zinc-400 sm:mt-3">
+                        <IconeInstagram width={15} height={15} className="shrink-0" />
+                        <span className="truncate">@{b.instagram}</span>
+                      </span>
+                    )}
+                    <span className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-gold-300 sm:hidden">
+                      Agendar <IconeSeta width={14} height={14} />
+                    </span>
+                    <span className="btn-ghost mt-6 hidden w-full group-hover:border-gold-400/60 group-hover:text-gold-200 sm:flex">
+                      Agendar com {b.nome}
+                    </span>
                   </span>
                 </Link>
               </Inclinar>
@@ -414,21 +436,24 @@ function Numeros() {
     [<Contador key="b" ate={3} />, 'barbeiros'],
     [
       <>
-        <Contador key="d" ate={30} /> dias
+        <Contador key="d" ate={30} />
+        <span className="text-xl sm:text-3xl"> dias</span>
       </>,
       'de agenda aberta',
     ],
   ];
   return (
-    <section aria-label="Números" className="mx-auto max-w-6xl px-4 pt-8 pb-20">
+    <section aria-label="Números" className="mx-auto max-w-6xl px-4 pt-4 pb-12 sm:pt-8 sm:pb-20">
       <Revelar
         tipo="zoom"
         className="card grid grid-cols-2 divide-white/[0.06] sm:grid-cols-4 sm:divide-x"
       >
         {itens.map(([valor, rotulo]) => (
-          <div key={rotulo} className="px-4 py-8 text-center">
-            <p className="texto-ouro font-display text-4xl font-black sm:text-5xl">{valor}</p>
-            <p className="mt-2 text-xs tracking-[0.2em] text-zinc-500 uppercase">{rotulo}</p>
+          <div key={rotulo} className="px-3 py-6 text-center sm:px-4 sm:py-8">
+            <p className="texto-ouro font-display text-3xl font-black sm:text-5xl">{valor}</p>
+            <p className="mt-2 text-[0.65rem] tracking-[0.15em] text-zinc-500 uppercase sm:text-xs sm:tracking-[0.2em]">
+              {rotulo}
+            </p>
           </div>
         ))}
       </Revelar>
@@ -440,7 +465,7 @@ function Numeros() {
 
 function Espaco() {
   return (
-    <section id="espaco" className="mx-auto max-w-6xl scroll-mt-20 px-4 py-24 sm:py-32">
+    <section id="espaco" className="mx-auto max-w-6xl scroll-mt-20 px-4 py-16 sm:py-32">
       <Cabeca
         eyebrow="O espaço"
         titulo={
@@ -453,26 +478,26 @@ function Espaco() {
         para o relógio.
       </Cabeca>
 
-      <div className="mt-14 grid auto-rows-[minmax(13rem,auto)] gap-4 md:grid-cols-6">
+      <div className="mt-10 grid auto-rows-[minmax(11rem,auto)] gap-3 sm:mt-14 sm:gap-4 md:auto-rows-[minmax(13rem,auto)] md:grid-cols-6">
         <Revelar className="md:col-span-4">
-          <Inclinar graus={3} className="card group relative h-full overflow-hidden p-8">
+          <Inclinar graus={3} className="card group relative h-full overflow-hidden p-6 sm:p-8">
             <span
               aria-hidden="true"
-              className="absolute -right-10 -bottom-10 flex h-56 w-56 items-center justify-center rounded-full bg-[radial-gradient(circle_at_35%_30%,#3a3a41,#070708_70%)] shadow-[0_30px_60px_-20px_#000] transition duration-700 group-hover:rotate-12"
+              className="absolute -right-10 -bottom-12 flex h-36 w-36 items-center sm:-bottom-10 sm:h-56 sm:w-56 justify-center rounded-full bg-[radial-gradient(circle_at_35%_30%,#3a3a41,#070708_70%)] shadow-[0_30px_60px_-20px_#000] transition duration-700 group-hover:rotate-12"
             >
-              <span className="flex h-24 w-24 items-center justify-center rounded-full bg-zinc-100 font-display text-5xl font-black text-ink-950">
+              <span className="flex h-16 w-16 items-center justify-center rounded-full bg-zinc-100 font-display text-3xl font-black text-ink-950 sm:h-24 sm:w-24 sm:text-5xl">
                 8
               </span>
             </span>
             <p className="eyebrow">Enquanto espera</p>
             <p className="mt-4 font-display text-5xl font-black text-zinc-50 sm:text-6xl">Sinuca</p>
-            <p className="mt-3 max-w-xs text-zinc-400">
+            <p className="mt-3 max-w-[62%] text-zinc-400 sm:max-w-xs">
               Mesa liberada para quem chega. Desafie o barbeiro — se tiver coragem.
             </p>
           </Inclinar>
         </Revelar>
         <Revelar className="md:col-span-2" atraso={100}>
-          <Inclinar graus={5} className="card relative h-full overflow-hidden p-8">
+          <Inclinar graus={5} className="card relative h-full overflow-hidden p-6 sm:p-8">
             <span
               aria-hidden="true"
               className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-amber-500/20 to-transparent"
@@ -493,7 +518,7 @@ function Espaco() {
           </Inclinar>
         </Revelar>
         <Revelar className="md:col-span-3" atraso={150}>
-          <Inclinar graus={4} className="card h-full overflow-hidden p-8">
+          <Inclinar graus={4} className="card h-full overflow-hidden p-6 sm:p-8">
             <p className="eyebrow">Sem rótulo</p>
             <p className="mt-4 font-display text-4xl font-black text-zinc-50">Todas as tribos</p>
             <div className="mt-6 flex flex-wrap gap-2">
@@ -513,7 +538,7 @@ function Espaco() {
         <Revelar className="md:col-span-3" atraso={200}>
           <Inclinar
             graus={4}
-            className="card flex h-full flex-col justify-between overflow-hidden p-8"
+            className="card flex h-full flex-col justify-between overflow-hidden p-6 sm:p-8"
           >
             <div>
               <p className="eyebrow">Sem ligação</p>
@@ -545,7 +570,7 @@ function ComoFunciona() {
   // A linha começa a encher quando a seção entra e termina antes de sair.
   const enchimento = Math.min(1, Math.max(0, (p - 0.25) / 0.4));
   return (
-    <section className="relative overflow-hidden border-y border-white/[0.06] bg-white/[0.015] py-24 sm:py-32">
+    <section className="relative overflow-hidden border-y border-white/[0.06] bg-white/[0.015] py-16 sm:py-32">
       <div className="mx-auto grid max-w-6xl gap-14 px-4 lg:grid-cols-2">
         <div>
           <Cabeca
@@ -631,7 +656,7 @@ function Local() {
   const c = config.dados;
   const status = c ? statusAgora(c) : null;
   return (
-    <section id="local" className="mx-auto max-w-6xl scroll-mt-20 px-4 py-24 sm:py-32">
+    <section id="local" className="mx-auto max-w-6xl scroll-mt-20 px-4 py-16 sm:py-32">
       <Cabeca
         eyebrow="Onde estamos"
         titulo={
@@ -680,7 +705,7 @@ function Local() {
                   >
                     <dt className="text-zinc-400">{f.dias}</dt>
                     <dd
-                      className={`font-medium ${f.horario === 'Fechado' ? 'text-zinc-500' : 'text-zinc-100'}`}
+                      className={`font-medium whitespace-nowrap ${f.horario === 'Fechado' ? 'text-zinc-500' : 'text-zinc-100'}`}
                     >
                       {f.horario}
                     </dd>
@@ -721,7 +746,7 @@ function Local() {
 
 function ChamadaFinal() {
   return (
-    <section className="relative isolate overflow-hidden px-4 py-28 text-center sm:py-40">
+    <section className="relative isolate overflow-hidden px-4 py-20 text-center sm:py-40">
       <div aria-hidden="true" className="absolute inset-0 -z-10">
         <div className="absolute top-1/2 left-1/2 h-[50vh] w-[80vw] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gold-500/15 blur-[120px]" />
       </div>
@@ -733,7 +758,11 @@ function ChamadaFinal() {
       </Revelar>
       <Revelar atraso={150} className="mt-12">
         <Magnetico forca={0.4}>
-          <Link to="/agendar" className="btn-gold px-12 py-5 text-lg" data-cursor="Bora">
+          <Link
+            to="/agendar"
+            className="btn-gold px-8 py-4 text-base whitespace-nowrap sm:px-12 sm:py-5 sm:text-lg"
+            data-cursor="Bora"
+          >
             Agendar meu horário <IconeSeta />
           </Link>
         </Magnetico>
@@ -750,10 +779,13 @@ export default function Home() {
   return (
     <>
       <Hero />
-      <div className="-rotate-2 scale-105 border-y border-gold-400/20 bg-gold-400/[0.06] py-5 font-display text-2xl font-bold tracking-wide text-zinc-100 backdrop-blur sm:text-4xl">
-        <Letreiro
-          itens={['Corte', 'Barba', 'Sinuca', 'Cerveja gelada', 'Degradê', 'Todas as tribos']}
-        />
+      {/* A faixa inclinada é mais larga que a tela; o contêiner corta as pontas. */}
+      <div className="overflow-hidden py-6">
+        <div className="-rotate-2 scale-105 border-y border-gold-400/20 bg-gold-400/[0.06] py-5 font-display text-2xl font-bold tracking-wide text-zinc-100 backdrop-blur sm:text-4xl">
+          <Letreiro
+            itens={['Corte', 'Barba', 'Sinuca', 'Cerveja gelada', 'Degradê', 'Todas as tribos']}
+          />
+        </div>
       </div>
       <Servicos />
       <Equipe />
@@ -776,7 +808,8 @@ export default function Home() {
           />
           {c && (
             <p className="text-center">
-              {c.instagram_usuario} · {formatarTelefone(c.telefone_contato)}
+              {c.instagram_usuario} ·{' '}
+              <span className="whitespace-nowrap">{formatarTelefone(c.telefone_contato)}</span>
             </p>
           )}
           <p className="flex gap-5">
