@@ -13,7 +13,14 @@ import { ErroCaixa, FotoBarbeiro, IconeCheck, IconeSeta, Skeletons } from '../..
 import { api } from '../../lib/api';
 import { DIAS_SEMANA_LONGOS } from '../../lib/assinaturas';
 import { formatarPreco } from '../../lib/datas';
-import { mascararTelefone, normalizarTelefone } from '../../lib/telefone';
+import { useConta } from '../../lib/conta';
+import {
+  BlocoConta,
+  CONTA_INICIAL,
+  contaPronta,
+  garantirConta,
+  type DadosConta,
+} from '../../components/Conta';
 import { useConsulta } from '../../lib/useConsulta';
 import type { Cobranca } from '../../types';
 
@@ -27,8 +34,8 @@ export default function Assinar() {
   const [barbeiroId, setBarbeiroId] = useState<string | null>(null);
   const [dia, setDia] = useState<number | null>(null);
   const [hora, setHora] = useState<string | null>(null);
-  const [nome, setNome] = useState('');
-  const [telefone, setTelefone] = useState('');
+  const [conta, setConta] = useState<DadosConta>(CONTA_INICIAL);
+  const { usuario } = useConta();
   const [honeypot, setHoneypot] = useState('');
   const [pagamento, setPagamento] = useState<EscolhaPagamentoValor>({
     ...ESCOLHA_INICIAL,
@@ -58,8 +65,7 @@ export default function Assinar() {
     !!plano &&
     !!barbeiroId &&
     (dia === null || !!hora) &&
-    nome.trim().length >= 2 &&
-    normalizarTelefone(telefone) !== null &&
+    contaPronta(conta, usuario) &&
     escolhaValida(pagamento) &&
     !enviando;
 
@@ -69,11 +75,11 @@ export default function Assinar() {
     setEnviando(true);
     setErro(null);
     try {
+      // O plano fica na conta do cliente: cria a conta (ou entra) antes.
+      await garantirConta(conta, usuario);
       const { token } = await api.contratarPlano({
         planoId: plano.id,
         barbeiroId,
-        clienteNome: nome.trim(),
-        clienteTelefone: telefone,
         fixo: dia === null || !hora ? null : { dia_semana: dia, hora },
         formaPagamento: pagamento.forma,
         honeypot,
@@ -128,11 +134,12 @@ export default function Assinar() {
             barbearia.
           </p>
         )}
-        <Link to={`/assinatura/${feito.token}`} className="btn-gold mt-6 w-full py-3.5">
-          Ir para o meu plano <IconeSeta />
+        <Link to="/minha-conta" className="btn-gold mt-6 w-full py-3.5">
+          Ir para minha conta <IconeSeta />
         </Link>
         <p className="mt-4 text-xs text-zinc-500">
-          Guarde este link: é por ele que você troca ou adianta seus horários.
+          Seu plano fica na sua conta: é só tocar em <strong>Entrar</strong> no site, de qualquer
+          aparelho.
         </p>
       </div>
     );
@@ -286,30 +293,7 @@ export default function Assinar() {
         <section className="space-y-4">
           {passoTitulo(4, 'Seus dados e pagamento')}
           <div className="card space-y-5 p-5 sm:p-6">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block text-sm">
-                <span className="mb-1.5 block text-zinc-300">Seu nome</span>
-                <input
-                  className="campo"
-                  value={nome}
-                  onChange={(e) => setNome(e.target.value)}
-                  maxLength={60}
-                  autoComplete="name"
-                />
-              </label>
-              <label className="block text-sm">
-                <span className="mb-1.5 block text-zinc-300">WhatsApp</span>
-                <input
-                  className="campo"
-                  type="tel"
-                  inputMode="numeric"
-                  placeholder="(11) 98765-4321"
-                  value={telefone}
-                  onChange={(e) => setTelefone(mascararTelefone(e.target.value))}
-                  autoComplete="tel-national"
-                />
-              </label>
-            </div>
+            <BlocoConta valor={conta} onMudar={setConta} />
             <div className="hidden" aria-hidden="true">
               <input
                 tabIndex={-1}

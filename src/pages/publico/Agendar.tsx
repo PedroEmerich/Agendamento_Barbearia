@@ -22,8 +22,15 @@ import {
   somarDias,
 } from '../../lib/datas';
 import { baixarIcs } from '../../lib/ics';
-import { mascararTelefone, normalizarTelefone } from '../../lib/telefone';
 import { useConsulta } from '../../lib/useConsulta';
+import { useConta } from '../../lib/conta';
+import {
+  BlocoConta,
+  CONTA_INICIAL,
+  contaPronta,
+  garantirConta,
+  type DadosConta,
+} from '../../components/Conta';
 import type { AgendamentoCliente, Barbeiro, Cobranca, Horario, Servico } from '../../types';
 import {
   ESCOLHA_INICIAL,
@@ -430,8 +437,8 @@ export default function Agendar() {
   const [barbeiroId, setBarbeiroId] = useState<string | null>(params.get('barbeiro'));
   const [data, setData] = useState<string | null>(null);
   const [hora, setHora] = useState<string | null>(null);
-  const [nome, setNome] = useState('');
-  const [telefone, setTelefone] = useState('');
+  const [conta, setConta] = useState<DadosConta>(CONTA_INICIAL);
+  const { usuario } = useConta();
   const [observacao, setObservacao] = useState('');
   const [honeypot, setHoneypot] = useState('');
   const [aceite, setAceite] = useState(true);
@@ -524,9 +531,7 @@ export default function Agendar() {
       : achado
         ? { nome: achado.nome, foto: achado.foto_url }
         : null;
-  const telefoneValido = normalizarTelefone(telefone) !== null;
-  const podeEnviar =
-    nome.trim().length >= 2 && telefoneValido && aceite && escolhaValida(pagamento) && !enviando;
+  const podeEnviar = contaPronta(conta, usuario) && aceite && escolhaValida(pagamento) && !enviando;
 
   function escolherServico(s: Servico) {
     if (s.id !== servico?.id) {
@@ -553,13 +558,15 @@ export default function Agendar() {
     setEnviando(true);
     setAviso(null);
     try {
+      // Cria a conta (ou entra) primeiro: o horário fica ligado a ela.
+      const cliente = await garantirConta(conta, usuario);
       const criado = await api.criarAgendamento({
         servicoId: servico.id,
         barbeiroId,
         data,
         hora,
-        clienteNome: nome.trim(),
-        clienteTelefone: telefone,
+        clienteNome: cliente.nome,
+        clienteTelefone: cliente.telefone ?? '',
         observacao: observacao.trim(),
         honeypot,
         formaPagamento: pagamento.forma,
@@ -840,48 +847,7 @@ export default function Agendar() {
 
             {passo === 4 && (
               <form onSubmit={enviar} className="card space-y-5 p-5 sm:p-8" noValidate>
-                <div>
-                  <label htmlFor="nome" className="mb-2 block text-sm font-medium text-zinc-200">
-                    Seu nome
-                  </label>
-                  <input
-                    id="nome"
-                    className="campo"
-                    value={nome}
-                    onChange={(e) => setNome(e.target.value)}
-                    maxLength={60}
-                    autoComplete="name"
-                    required
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="telefone"
-                    className="mb-2 block text-sm font-medium text-zinc-200"
-                  >
-                    WhatsApp
-                  </label>
-                  <input
-                    id="telefone"
-                    className="campo"
-                    type="tel"
-                    inputMode="numeric"
-                    placeholder="(11) 98765-4321"
-                    value={telefone}
-                    onChange={(e) => setTelefone(mascararTelefone(e.target.value))}
-                    autoComplete="tel-national"
-                    aria-describedby="telefone-ajuda"
-                    required
-                  />
-                  <p
-                    id="telefone-ajuda"
-                    className={`mt-2 text-xs ${telefone && !telefoneValido ? 'text-amber-300' : 'text-zinc-500'}`}
-                  >
-                    {telefone && !telefoneValido
-                      ? 'Digite o número completo, com DDD.'
-                      : 'É para onde enviamos o lembrete.'}
-                  </p>
-                </div>
+                <BlocoConta valor={conta} onMudar={setConta} />
                 <div>
                   <label htmlFor="obs" className="mb-2 block text-sm font-medium text-zinc-200">
                     Observação <span className="font-normal text-zinc-500">(opcional)</span>

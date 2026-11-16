@@ -9,6 +9,7 @@ import type {
   FormaPagamento,
   MetodoPagamento,
   HorarioFixo,
+  MinhaConta,
   Plano,
   StatusAssinatura,
   AgendamentoPainel,
@@ -27,20 +28,25 @@ export const MODO_DEMO = import.meta.env.VITE_DEMO !== 'false';
 
 const CHAVE_SESSAO = 'ug_auth';
 
+/**
+ * Sessão do login. "Manter conectado" guarda no localStorage (continua após fechar o
+ * navegador); sem isso, fica no sessionStorage (some ao fechar a aba).
+ */
 export const sessao = {
   ler(): string | null {
     try {
-      return sessionStorage.getItem(CHAVE_SESSAO);
+      return sessionStorage.getItem(CHAVE_SESSAO) ?? localStorage.getItem(CHAVE_SESSAO);
     } catch {
       return null;
     }
   },
-  gravar(token: string | null): void {
+  gravar(token: string | null, lembrar = false): void {
     try {
-      if (token) sessionStorage.setItem(CHAVE_SESSAO, token);
-      else sessionStorage.removeItem(CHAVE_SESSAO);
+      sessionStorage.removeItem(CHAVE_SESSAO);
+      localStorage.removeItem(CHAVE_SESSAO);
+      if (token) (lembrar ? localStorage : sessionStorage).setItem(CHAVE_SESSAO, token);
     } catch {
-      // sem sessionStorage: a sessão dura só até recarregar
+      // sem armazenamento: a sessão dura só até recarregar
     }
   },
 };
@@ -95,8 +101,6 @@ export interface DadosPagador {
 export interface NovaAssinatura {
   planoId: string;
   barbeiroId: string;
-  clienteNome: string;
-  clienteTelefone: string;
   fixo: HorarioFixo | null;
   formaPagamento: FormaPagamento;
   honeypot: string;
@@ -156,6 +160,9 @@ export const api = {
 
   login: (login: string, senha: string) =>
     chamar<{ authToken: string; usuario: Usuario }>('login', { login, senha }),
+  cadastrarCliente: (dados: { nome: string; email: string; telefone: string; senha: string }) =>
+    chamar<{ authToken: string; usuario: Usuario }>('cadastrarCliente', { ...dados }),
+  minhaConta: () => chamar<MinhaConta>('minhaConta'),
   me: () => chamar<Usuario>('me'),
   listarAgendamentos: (data: string) => chamar<AgendamentoPainel[]>('listarAgendamentos', { data }),
   listarAgendamentosPeriodo: (de: string, ate: string, barbeiroId?: string) =>
