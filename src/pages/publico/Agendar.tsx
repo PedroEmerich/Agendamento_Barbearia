@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { Inclinar } from '../../components/efeitos';
 import {
   ErroCaixa,
+  FotoBarbeiro,
   IconeCalendario,
   IconeCheck,
   IconeRelogio,
-  IconeUsuario,
+  IconeSeta,
   IconeVoltar,
   Skeletons,
 } from '../../components/ui';
@@ -15,41 +17,137 @@ import {
   formatarDataLonga,
   formatarDuracao,
   formatarPreco,
+  hhmmParaMin,
   nomeDiaCurto,
   somarDias,
 } from '../../lib/datas';
 import { baixarIcs } from '../../lib/ics';
 import { mascararTelefone, normalizarTelefone } from '../../lib/telefone';
 import { useConsulta } from '../../lib/useConsulta';
-import type { AgendamentoCliente, Barbeiro, Servico } from '../../types';
+import type { AgendamentoCliente, Barbeiro, Horario, Servico } from '../../types';
 
 const PASSOS = ['Serviço', 'Barbeiro', 'Dia', 'Horário', 'Seus dados'];
+const TITULOS = ['Qual serviço?', 'Com quem?', 'Que dia?', 'Que horas?', 'Quase lá'];
+const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+
+/* ---------------------------------------------------------------- peças */
 
 function Opcao({
   selecionado,
   onClick,
   children,
+  className = '',
 }: {
   selecionado: boolean;
   onClick: () => void;
-  children: React.ReactNode;
+  children: ReactNode;
+  className?: string;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={selecionado}
-      className={`card flex w-full cursor-pointer items-center gap-4 p-4 text-left transition hover:border-gold-400/60 ${selecionado ? 'border-gold-400 bg-gold-400/10' : ''}`}
+    <Inclinar
+      graus={3}
+      className={`card group ${selecionado ? '!border-gold-400/70 !bg-gold-400/[0.08]' : ''}`}
     >
-      {children}
-    </button>
+      <button
+        type="button"
+        onClick={onClick}
+        aria-pressed={selecionado}
+        className={`flex w-full cursor-pointer items-center gap-4 p-4 text-left sm:p-5 ${className}`}
+      >
+        {children}
+        <span
+          aria-hidden="true"
+          className={`ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition ${
+            selecionado
+              ? 'border-gold-300 bg-gold-400 text-ink-950'
+              : 'border-white/15 text-transparent group-hover:border-gold-400/60'
+          }`}
+        >
+          <IconeCheck width={14} height={14} />
+        </span>
+      </button>
+    </Inclinar>
   );
 }
 
-function Confirmacao({ agendamento }: { agendamento: AgendamentoCliente }) {
+function Resumo({
+  servico,
+  barbeiro,
+  data,
+  hora,
+  passo,
+  irPara,
+}: {
+  servico: Servico | null;
+  barbeiro: { nome: string; foto?: string } | null;
+  data: string | null;
+  hora: string | null;
+  passo: number;
+  irPara: (p: number) => void;
+}) {
+  const linhas: [number, string, ReactNode | null][] = [
+    [0, 'Serviço', servico?.nome ?? null],
+    [
+      1,
+      'Barbeiro',
+      barbeiro ? (
+        <span className="flex items-center gap-2">
+          {barbeiro.foto && (
+            <FotoBarbeiro nome={barbeiro.nome} foto={barbeiro.foto} tamanho="h-6 w-6" />
+          )}
+          {barbeiro.nome}
+        </span>
+      ) : null,
+    ],
+    [2, 'Dia', data ? formatarDataLonga(data) : null],
+    [3, 'Horário', hora && servico ? `${hora} – ${minFim(hora, servico.duracao_min)}` : null],
+  ];
+  return (
+    <div className="card p-6">
+      <p className="eyebrow">Seu horário</p>
+      <dl className="mt-5 space-y-1">
+        {linhas.map(([p, rotulo, valor]) => (
+          <div key={rotulo}>
+            <button
+              type="button"
+              disabled={!valor || p >= passo}
+              onClick={() => irPara(p)}
+              className="group flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left transition enabled:cursor-pointer enabled:hover:bg-white/[0.05]"
+            >
+              <dt className="text-sm text-zinc-500">{rotulo}</dt>
+              <dd
+                className={`text-right text-sm font-medium ${valor ? 'text-zinc-100' : 'text-zinc-600'}`}
+              >
+                {valor ?? '—'}
+              </dd>
+            </button>
+          </div>
+        ))}
+      </dl>
+      <div className="mt-4 flex items-end justify-between border-t border-white/[0.07] pt-4">
+        <span className="text-sm text-zinc-500">
+          Total
+          {servico && <span className="block text-xs">{formatarDuracao(servico.duracao_min)}</span>}
+        </span>
+        <span className="font-display text-3xl font-bold text-gold-200">
+          {servico ? formatarPreco(servico.preco) : '—'}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function minFim(hora: string, duracao: number) {
+  const m = hhmmParaMin(hora) + duracao;
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+}
+
+/* ------------------------------------------------------------- confirmação */
+
+function Confirmacao({ agendamento: a }: { agendamento: AgendamentoCliente }) {
   const config = useConsulta(api.getConfigPublica, []);
   const [copiado, setCopiado] = useState(false);
-  const link = `${window.location.origin}${import.meta.env.BASE_URL}meu-agendamento/${agendamento.token}`;
+  const link = `${window.location.origin}${import.meta.env.BASE_URL}meu-agendamento/${a.token}`;
 
   async function copiar() {
     try {
@@ -62,63 +160,238 @@ function Confirmacao({ agendamento }: { agendamento: AgendamentoCliente }) {
   }
 
   return (
-    <div className="mx-auto max-w-md px-4 py-10 text-center">
-      <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-400/15 text-emerald-300">
-        <IconeCheck width={28} height={28} />
+    <div className="relative mx-auto max-w-md px-4 py-10 text-center">
+      <div
+        aria-hidden="true"
+        className="absolute top-0 left-1/2 -z-10 h-72 w-72 -translate-x-1/2 rounded-full bg-emerald-400/10 blur-[90px]"
+      />
+      <span className="relative mx-auto flex h-16 w-16 animate-entrar items-center justify-center rounded-full bg-gradient-to-b from-emerald-300 to-emerald-500 text-ink-950 shadow-[0_0_50px_-5px_rgb(52_211_153/0.6)]">
+        <span className="absolute inset-0 animate-ping rounded-full bg-emerald-400/30 [animation-iteration-count:2]" />
+        <IconeCheck width={30} height={30} />
       </span>
-      <h1 className="titulo mt-4">Horário marcado!</h1>
-      <p className="mt-2 text-zinc-400">
-        Você receberá um lembrete no WhatsApp cerca de 2 horas antes.
+      <h1 className="titulo mt-6 animate-entrar [animation-delay:120ms]">Horário marcado!</h1>
+      <p className="mt-3 animate-entrar text-zinc-400 [animation-delay:200ms]">
+        Você recebe um lembrete no WhatsApp cerca de 2 horas antes.
       </p>
 
-      <div className="card mt-8 p-6 text-left">
-        <p className="text-xs tracking-widest text-zinc-500 uppercase">Código</p>
-        <p className="font-display text-3xl font-bold tracking-[0.2em] text-gold-300">
-          {agendamento.codigo}
-        </p>
-        <dl className="mt-5 space-y-2 text-sm">
-          {[
-            ['Serviço', agendamento.servico_nome],
-            ['Barbeiro', agendamento.barbeiro_nome],
-            ['Dia', formatarDataLonga(agendamento.data)],
-            ['Horário', `${agendamento.hora_inicio} – ${agendamento.hora_fim}`],
-            ['Valor', formatarPreco(agendamento.preco)],
-          ].map(([rotulo, valor]) => (
-            <div key={rotulo} className="flex justify-between gap-4">
-              <dt className="text-zinc-400">{rotulo}</dt>
-              <dd className="text-right font-medium text-zinc-100">{valor}</dd>
+      {/* Ticket */}
+      <div className="mt-8 animate-entrar text-left [animation-delay:300ms]">
+        <div className="card relative overflow-hidden rounded-b-none border-b-0 p-6">
+          <div className="flex items-center gap-4">
+            <FotoBarbeiro nome={a.barbeiro_nome} foto={a.barbeiro_foto} tamanho="h-14 w-14" />
+            <div>
+              <p className="text-lg font-semibold text-zinc-50">{a.servico_nome}</p>
+              <p className="text-sm text-zinc-400">com {a.barbeiro_nome}</p>
             </div>
-          ))}
-        </dl>
+          </div>
+          <div className="mt-6 grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-xs tracking-widest text-zinc-500 uppercase">Dia</p>
+              <p className="mt-1 font-medium text-zinc-100 first-letter:uppercase">
+                {formatarDataLonga(a.data)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs tracking-widest text-zinc-500 uppercase">Horário</p>
+              <p className="mt-1 font-medium text-zinc-100">
+                {a.hora_inicio} – {a.hora_fim}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div
+          aria-hidden="true"
+          className="relative h-6 border-x border-white/[0.08] bg-white/[0.03]"
+        >
+          <span className="absolute top-1/2 -left-3 h-6 w-6 -translate-y-1/2 rounded-full bg-ink-950" />
+          <span className="absolute top-1/2 -right-3 h-6 w-6 -translate-y-1/2 rounded-full bg-ink-950" />
+          <span className="absolute inset-x-5 top-1/2 border-t border-dashed border-white/15" />
+        </div>
+        <div className="card flex items-center justify-between rounded-t-none border-t-0 p-6">
+          <div>
+            <p className="text-xs tracking-widest text-zinc-500 uppercase">Código</p>
+            <p className="texto-ouro font-display text-3xl font-black tracking-[0.2em]">
+              {a.codigo}
+            </p>
+          </div>
+          <p className="font-display text-2xl font-bold text-zinc-100">{formatarPreco(a.preco)}</p>
+        </div>
       </div>
 
-      <div className="mt-6 flex flex-col gap-3">
+      <div className="mt-6 flex animate-entrar flex-col gap-3 [animation-delay:420ms]">
         <button
-          className="btn-gold"
+          className="btn-gold py-3.5"
           disabled={!config.dados}
-          onClick={() => config.dados && baixarIcs(agendamento, config.dados)}
+          onClick={() => config.dados && baixarIcs(a, config.dados)}
         >
           <IconeCalendario /> Adicionar ao calendário
         </button>
-        <button className="btn-ghost" onClick={copiar}>
-          {copiado ? 'Link copiado!' : 'Copiar link do agendamento'}
-        </button>
-        <Link to={`/meu-agendamento/${agendamento.token}`} className="btn-ghost">
-          Ver ou cancelar
-        </Link>
+        <div className="grid grid-cols-2 gap-3">
+          <button className="btn-ghost" onClick={copiar}>
+            {copiado ? 'Copiado!' : 'Copiar link'}
+          </button>
+          <Link to={`/meu-agendamento/${a.token}`} className="btn-ghost">
+            Ver ou cancelar
+          </Link>
+        </div>
       </div>
-      <p className="mt-4 text-xs text-zinc-500">
+      <p className="mt-5 text-xs text-zinc-500">
         Guarde o link: é por ele que você consulta ou cancela o horário.
       </p>
     </div>
   );
 }
 
+/* -------------------------------------------------------- carrossel de dias */
+
+function CarrosselDias({
+  hoje,
+  janela,
+  livres,
+  selecionado,
+  onEscolher,
+}: {
+  hoje: string;
+  janela: number;
+  livres: string[];
+  selecionado: string | null;
+  onEscolher: (d: string) => void;
+}) {
+  const trilho = useRef<HTMLDivElement>(null);
+  const dias = Array.from({ length: janela + 1 }, (_, i) => somarDias(hoje, i));
+  const rolar = (dir: number) => trilho.current?.scrollBy({ left: dir * 320, behavior: 'smooth' });
+
+  return (
+    <div className="relative">
+      <div className="mb-3 hidden justify-end gap-2 sm:flex">
+        <button
+          type="button"
+          className="btn-ghost h-10 w-10 px-0"
+          onClick={() => rolar(-1)}
+          aria-label="Dias anteriores"
+        >
+          <IconeVoltar width={16} height={16} />
+        </button>
+        <button
+          type="button"
+          className="btn-ghost h-10 w-10 px-0"
+          onClick={() => rolar(1)}
+          aria-label="Próximos dias"
+        >
+          <IconeSeta width={16} height={16} />
+        </button>
+      </div>
+      <div
+        ref={trilho}
+        className="sem-barra -mx-4 flex snap-x snap-mandatory gap-2 overflow-x-auto px-4 pb-2 [mask-image:linear-gradient(90deg,transparent,#000_16px,#000_calc(100%-32px),transparent)]"
+        onWheel={(e) => {
+          if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && trilho.current)
+            trilho.current.scrollLeft += e.deltaY;
+        }}
+      >
+        {dias.map((d, i) => {
+          const livre = livres.includes(d);
+          const [, mes, dia] = d.split('-');
+          const novoMes = i === 0 || dia === '01';
+          return (
+            <div key={d} className="flex shrink-0 snap-start items-end gap-2">
+              {novoMes && (
+                <span className="self-stretch py-2 pr-1 text-[0.65rem] font-semibold tracking-[0.25em] text-gold-400 uppercase [writing-mode:vertical-rl] rotate-180">
+                  {MESES[Number(mes) - 1]}
+                </span>
+              )}
+              <button
+                type="button"
+                disabled={!livre}
+                aria-pressed={selecionado === d}
+                aria-label={`${formatarDataLonga(d)}${livre ? '' : ' — sem horários'}`}
+                onClick={() => onEscolher(d)}
+                className={`relative flex h-24 w-[4.25rem] cursor-pointer flex-col items-center justify-center rounded-2xl border transition duration-300 disabled:cursor-not-allowed ${
+                  selecionado === d
+                    ? 'border-gold-300 bg-gradient-to-b from-gold-300 to-gold-500 text-ink-950 shadow-[0_10px_30px_-10px_#d4a94e]'
+                    : livre
+                      ? 'border-white/10 bg-white/[0.04] text-zinc-100 backdrop-blur hover:-translate-y-1 hover:border-gold-400/60'
+                      : 'border-transparent text-zinc-600'
+                }`}
+              >
+                <span className="text-[0.7rem] font-semibold uppercase">
+                  {d === hoje ? 'hoje' : nomeDiaCurto(d)}
+                </span>
+                <span className="font-display text-2xl font-bold">{dia}</span>
+                {livre && selecionado !== d && (
+                  <span className="absolute bottom-2 h-1 w-1 rounded-full bg-emerald-400" />
+                )}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+      <p className="mt-3 flex items-center gap-2 text-xs text-zinc-500">
+        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Dias com horário livre
+      </p>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------- grade de horas */
+
+function GradeHorarios({
+  horarios,
+  selecionada,
+  onEscolher,
+}: {
+  horarios: Horario[];
+  selecionada: string | null;
+  onEscolher: (h: string) => void;
+}) {
+  const grupos: [string, Horario[]][] = [
+    ['Manhã', horarios.filter((h) => hhmmParaMin(h.hora) < 720)],
+    ['Tarde', horarios.filter((h) => hhmmParaMin(h.hora) >= 720 && hhmmParaMin(h.hora) < 1080)],
+    ['Noite', horarios.filter((h) => hhmmParaMin(h.hora) >= 1080)],
+  ];
+  let indice = 0;
+  return (
+    <div className="space-y-7">
+      {grupos
+        .filter(([, lista]) => lista.length)
+        .map(([rotulo, lista]) => (
+          <div key={rotulo}>
+            <p className="mb-3 flex items-center gap-3 text-xs font-semibold tracking-[0.25em] text-zinc-500 uppercase">
+              {rotulo}
+              <span className="h-px flex-1 bg-white/[0.06]" />
+              <span className="tracking-normal normal-case">{lista.length} livres</span>
+            </p>
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+              {lista.map((h) => (
+                <button
+                  key={h.hora}
+                  type="button"
+                  aria-pressed={selecionada === h.hora}
+                  onClick={() => onEscolher(h.hora)}
+                  style={{ animationDelay: `${Math.min(indice++, 16) * 25}ms` }}
+                  className={`min-h-12 animate-entrar cursor-pointer rounded-2xl border font-semibold tabular-nums transition duration-300 ${
+                    selecionada === h.hora
+                      ? 'border-gold-300 bg-gradient-to-b from-gold-300 to-gold-500 text-ink-950'
+                      : 'border-white/10 bg-white/[0.04] text-zinc-100 backdrop-blur hover:-translate-y-0.5 hover:border-gold-400/60 hover:text-gold-200'
+                  }`}
+                >
+                  {h.hora}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- página */
+
 export default function Agendar() {
   const [params] = useSearchParams();
   const [passo, setPasso] = useState(0);
   const [servico, setServico] = useState<Servico | null>(null);
-  const [barbeiroId, setBarbeiroId] = useState<string | null>(null);
+  const [barbeiroId, setBarbeiroId] = useState<string | null>(params.get('barbeiro'));
   const [data, setData] = useState<string | null>(null);
   const [hora, setHora] = useState<string | null>(null);
   const [nome, setNome] = useState('');
@@ -130,14 +403,15 @@ export default function Agendar() {
   const [aviso, setAviso] = useState<string | null>(null);
   const [resultado, setResultado] = useState<AgendamentoCliente | null>(null);
   const tituloRef = useRef<HTMLHeadingElement>(null);
+  const primeiraVez = useRef(true);
 
   const hoje = useMemo(() => agoraSP().data, []);
   const config = useConsulta(api.getConfigPublica, []);
   const servicos = useConsulta(api.listarServicos, []);
-  const barbeiros = useConsulta(
-    servico ? () => api.listarBarbeiros(servico.id) : null,
-    [servico?.id],
-  );
+  const todosBarbeiros = useConsulta(() => api.listarBarbeiros(), []);
+  const barbeiros = useConsulta(servico ? () => api.listarBarbeiros(servico.id) : null, [
+    servico?.id,
+  ]);
   const janela = config.dados?.janela_max_dias ?? 30;
   const dias = useConsulta(
     servico && barbeiroId && passo >= 2
@@ -152,40 +426,60 @@ export default function Agendar() {
     [servico?.id, barbeiroId, data, passo >= 3],
   );
 
-  // Serviço pré-selecionado quando o cliente vem da lista da página inicial.
+  // Pré-seleção vinda da página inicial (?servico= e/ou ?barbeiro=).
   const servicoInicial = params.get('servico');
   useEffect(() => {
     if (!servicoInicial || servico || !servicos.dados) return;
     const achado = servicos.dados.find((s) => s.id === servicoInicial);
     if (achado) {
       setServico(achado);
-      setPasso(1);
+      setPasso(barbeiroId ? 2 : 1);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [servicos.dados]);
 
+  // O barbeiro pré-escolhido precisa fazer o serviço escolhido.
   useEffect(() => {
-    tituloRef.current?.focus();
-    window.scrollTo(0, 0);
+    if (
+      barbeiroId &&
+      barbeiroId !== 'qualquer' &&
+      barbeiros.dados &&
+      !barbeiros.dados.some((b) => b.id === barbeiroId)
+    ) {
+      setBarbeiroId(null);
+      if (passo > 1) setPasso(1);
+    }
+  }, [barbeiros.dados, barbeiroId, passo]);
+
+  useEffect(() => {
+    if (primeiraVez.current) {
+      primeiraVez.current = false;
+      return;
+    }
+    tituloRef.current?.focus({ preventScroll: true });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [passo]);
 
   if (resultado) return <Confirmacao agendamento={resultado} />;
 
-  const nomeBarbeiro =
+  const achado = todosBarbeiros.dados?.find((b) => b.id === barbeiroId);
+  const barbeiroEscolhido =
     barbeiroId === 'qualquer'
-      ? 'Qualquer barbeiro'
-      : (barbeiros.dados?.find((b) => b.id === barbeiroId)?.nome ?? '');
+      ? { nome: 'Qualquer barbeiro' }
+      : achado
+        ? { nome: achado.nome, foto: achado.foto_url }
+        : null;
   const telefoneValido = normalizarTelefone(telefone) !== null;
   const podeEnviar = nome.trim().length >= 2 && telefoneValido && aceite && !enviando;
 
   function escolherServico(s: Servico) {
     if (s.id !== servico?.id) {
-      setBarbeiroId(null);
       setData(null);
       setHora(null);
     }
     setServico(s);
-    setPasso(1);
+    // Se o cliente veio pelo cartão de um barbeiro, pula direto para o dia.
+    setPasso(barbeiroId ? 2 : 1);
   }
 
   function escolherBarbeiro(id: string) {
@@ -229,302 +523,425 @@ export default function Agendar() {
     }
   }
 
-  const titulos = [
-    'Qual serviço?',
-    'Com quem?',
-    'Que dia?',
-    'Que horas?',
-    'Para finalizar, seus dados',
-  ];
-
   return (
-    <div className="mx-auto max-w-xl px-4 py-6">
-      <div className="flex items-center gap-3">
-        {passo > 0 ? (
-          <button
-            className="btn-ghost h-11 w-11 shrink-0 px-0"
-            onClick={() => setPasso(passo - 1)}
-            aria-label="Voltar ao passo anterior"
-          >
-            <IconeVoltar />
-          </button>
-        ) : (
-          <Link to="/" className="btn-ghost h-11 w-11 shrink-0 px-0" aria-label="Voltar ao início">
-            <IconeVoltar />
-          </Link>
-        )}
-        <div className="flex-1">
-          <p className="text-xs text-zinc-500">
-            Passo {passo + 1} de {PASSOS.length} · {PASSOS[passo]}
-          </p>
-          <div
-            className="mt-1.5 flex gap-1"
-            role="progressbar"
-            aria-valuemin={1}
-            aria-valuemax={PASSOS.length}
-            aria-valuenow={passo + 1}
-          >
-            {PASSOS.map((p, i) => (
-              <span
-                key={p}
-                className={`h-1 flex-1 rounded-full ${i <= passo ? 'bg-gold-400' : 'bg-ink-700'}`}
-              />
-            ))}
-          </div>
-        </div>
-      </div>
+    <div className="relative mx-auto max-w-6xl px-4 pt-4 pb-32 lg:pb-16">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -top-24 right-0 -z-10 h-80 w-80 rounded-full bg-gold-500/10 blur-[100px]"
+      />
 
-      <h1 ref={tituloRef} tabIndex={-1} className="titulo mt-6 outline-none">
-        {titulos[passo]}
-      </h1>
-
-      {passo > 0 && servico && (
-        <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm text-zinc-400">
-          <span>{servico.nome}</span>
-          {passo > 1 && <span>· {nomeBarbeiro}</span>}
-          {passo > 2 && data && <span>· {formatarDataLonga(data)}</span>}
-          {passo > 3 && hora && <span>· {hora}</span>}
-        </p>
-      )}
-
-      {aviso && (
-        <p
-          role="alert"
-          className="mt-4 rounded-xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm text-amber-100"
-        >
-          {aviso}
-        </p>
-      )}
-
-      <div className="mt-6">
-        {passo === 0 && (
-          <div className="space-y-3">
-            {servicos.erro && <ErroCaixa mensagem={servicos.erro} onTentar={servicos.recarregar} />}
-            {servicos.carregando && <Skeletons n={4} className="h-20" />}
-            {servicos.dados?.map((s) => (
-              <Opcao key={s.id} selecionado={servico?.id === s.id} onClick={() => escolherServico(s)}>
-                <span className="flex-1">
-                  <span className="block font-semibold text-zinc-50">{s.nome}</span>
-                  <span className="mt-0.5 inline-flex items-center gap-1.5 text-xs text-zinc-400">
-                    <IconeRelogio width={14} height={14} /> {formatarDuracao(s.duracao_min)}
-                  </span>
-                </span>
-                <span className="font-display text-lg font-bold text-gold-300">
-                  {formatarPreco(s.preco)}
-                </span>
-              </Opcao>
-            ))}
-          </div>
-        )}
-
-        {passo === 1 && (
-          <div className="space-y-3">
-            {barbeiros.erro && <ErroCaixa mensagem={barbeiros.erro} onTentar={barbeiros.recarregar} />}
-            {barbeiros.carregando && <Skeletons n={4} className="h-20" />}
-            {barbeiros.dados && (
-              <>
-                <Opcao
-                  selecionado={barbeiroId === 'qualquer'}
-                  onClick={() => escolherBarbeiro('qualquer')}
+      {/* Etapas */}
+      <nav aria-label="Etapas do agendamento" className="sem-barra -mx-4 overflow-x-auto px-4">
+        <ol className="flex min-w-max items-center gap-2">
+          {PASSOS.map((p, i) => (
+            <li key={p} className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={i >= passo}
+                onClick={() => setPasso(i)}
+                aria-current={i === passo ? 'step' : undefined}
+                className={`flex items-center gap-2 rounded-full border py-1.5 pr-3.5 pl-1.5 text-xs font-semibold transition enabled:cursor-pointer ${
+                  i === passo
+                    ? 'border-gold-400/60 bg-gold-400/10 text-gold-100'
+                    : i < passo
+                      ? 'border-white/10 bg-white/[0.04] text-zinc-300 hover:border-gold-400/40'
+                      : 'border-white/[0.06] text-zinc-600'
+                }`}
+              >
+                <span
+                  className={`flex h-6 w-6 items-center justify-center rounded-full text-[0.7rem] ${
+                    i < passo
+                      ? 'bg-gold-400 text-ink-950'
+                      : i === passo
+                        ? 'bg-gold-300 text-ink-950'
+                        : 'bg-white/[0.06]'
+                  }`}
                 >
-                  <Avatar />
-                  <span>
-                    <span className="block font-semibold text-zinc-50">Qualquer barbeiro</span>
-                    <span className="text-xs text-zinc-400">Mais horários disponíveis</span>
-                  </span>
-                </Opcao>
-                {barbeiros.dados.map((b) => (
+                  {i < passo ? <IconeCheck width={12} height={12} /> : i + 1}
+                </span>
+                {p}
+              </button>
+              {i < PASSOS.length - 1 && (
+                <span
+                  className={`h-px w-4 sm:w-8 ${i < passo ? 'bg-gold-400/60' : 'bg-white/10'}`}
+                />
+              )}
+            </li>
+          ))}
+        </ol>
+      </nav>
+
+      <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_22rem] lg:gap-12">
+        <div className="min-w-0">
+          <div className="flex items-center gap-3">
+            {passo > 0 ? (
+              <button
+                className="btn-ghost h-11 w-11 shrink-0 px-0"
+                onClick={() => setPasso(passo - 1)}
+                aria-label="Voltar ao passo anterior"
+              >
+                <IconeVoltar />
+              </button>
+            ) : (
+              <Link
+                to="/"
+                className="btn-ghost h-11 w-11 shrink-0 px-0"
+                aria-label="Voltar ao início"
+              >
+                <IconeVoltar />
+              </Link>
+            )}
+            <div>
+              <p className="text-xs tracking-[0.25em] text-gold-400 uppercase">
+                Passo {passo + 1} de {PASSOS.length}
+              </p>
+              <h1
+                ref={tituloRef}
+                tabIndex={-1}
+                key={passo}
+                className="titulo animate-entrar outline-none"
+              >
+                {TITULOS[passo]}
+              </h1>
+            </div>
+          </div>
+
+          {aviso && (
+            <p
+              role="alert"
+              className="mt-6 animate-entrar rounded-2xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm text-amber-100 backdrop-blur"
+            >
+              {aviso}
+            </p>
+          )}
+
+          <div key={passo} className="mt-8 animate-entrar">
+            {passo === 0 && (
+              <div className="space-y-3">
+                {servicos.erro && (
+                  <ErroCaixa mensagem={servicos.erro} onTentar={servicos.recarregar} />
+                )}
+                {servicos.carregando && <Skeletons n={5} className="h-24" />}
+                {servicos.dados?.map((s) => (
                   <Opcao
-                    key={b.id}
-                    selecionado={barbeiroId === b.id}
-                    onClick={() => escolherBarbeiro(b.id)}
+                    key={s.id}
+                    selecionado={servico?.id === s.id}
+                    onClick={() => escolherServico(s)}
                   >
-                    <Avatar barbeiro={b} />
-                    <span className="font-semibold text-zinc-50">{b.nome}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-semibold text-zinc-50">{s.nome}</span>
+                      <span className="mt-0.5 block truncate text-sm text-zinc-400">
+                        {s.descricao}
+                      </span>
+                      <span className="mt-2 inline-flex items-center gap-1.5 text-xs text-zinc-500">
+                        <IconeRelogio width={13} height={13} /> {formatarDuracao(s.duracao_min)}
+                      </span>
+                    </span>
+                    <span className="font-display text-xl font-bold text-gold-200">
+                      {formatarPreco(s.preco)}
+                    </span>
                   </Opcao>
                 ))}
+              </div>
+            )}
+
+            {passo === 1 && (
+              <>
+                {barbeiros.erro && (
+                  <ErroCaixa mensagem={barbeiros.erro} onTentar={barbeiros.recarregar} />
+                )}
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {barbeiros.carregando && <Skeletons n={3} className="h-60" />}
+                  {barbeiros.dados?.map((b) => (
+                    <CartaoBarbeiro
+                      key={b.id}
+                      barbeiro={b}
+                      selecionado={barbeiroId === b.id}
+                      onClick={() => escolherBarbeiro(b.id)}
+                    />
+                  ))}
+                </div>
+                {barbeiros.dados && (
+                  <div className="mt-3">
+                    <Opcao
+                      selecionado={barbeiroId === 'qualquer'}
+                      onClick={() => escolherBarbeiro('qualquer')}
+                    >
+                      <span className="flex -space-x-3">
+                        {barbeiros.dados.map((b) => (
+                          <FotoBarbeiro
+                            key={b.id}
+                            nome={b.nome}
+                            foto={b.foto_url}
+                            tamanho="h-11 w-11"
+                            className="ring-2 ring-ink-950"
+                          />
+                        ))}
+                      </span>
+                      <span>
+                        <span className="block font-semibold text-zinc-50">Qualquer barbeiro</span>
+                        <span className="text-sm text-zinc-400">
+                          Mais horários: a gente encaixa com quem estiver livre
+                        </span>
+                      </span>
+                    </Opcao>
+                  </div>
+                )}
               </>
             )}
-          </div>
-        )}
 
-        {passo === 2 && (
-          <>
-            {dias.erro && <ErroCaixa mensagem={dias.erro} onTentar={dias.recarregar} />}
-            <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
-              {dias.carregando && <Skeletons n={12} className="h-20" />}
-              {dias.dados &&
-                Array.from({ length: janela + 1 }, (_, i) => somarDias(hoje, i)).map((d) => {
-                  const livre = dias.dados!.includes(d);
-                  const [, mes, dia] = d.split('-');
-                  return (
-                    <button
-                      key={d}
-                      type="button"
-                      disabled={!livre}
-                      aria-pressed={data === d}
-                      aria-label={`${formatarDataLonga(d)}${livre ? '' : ' — sem horários'}`}
-                      onClick={() => {
-                        if (d !== data) setHora(null);
-                        setData(d);
-                        setPasso(3);
-                      }}
-                      className={`flex min-h-20 cursor-pointer flex-col items-center justify-center rounded-xl border text-sm transition disabled:cursor-not-allowed disabled:border-ink-800 disabled:text-zinc-600 ${data === d ? 'border-gold-400 bg-gold-400/10' : 'border-ink-700 bg-ink-900 enabled:hover:border-gold-400/60'}`}
-                    >
-                      <span className="text-xs uppercase">{d === hoje ? 'hoje' : nomeDiaCurto(d)}</span>
-                      <span className="font-display text-xl font-bold">{dia}</span>
-                      <span className="text-[0.65rem] opacity-70">/{mes}</span>
-                    </button>
-                  );
-                })}
-            </div>
-            {dias.dados?.length === 0 && (
-              <p className="mt-4 text-sm text-zinc-400">
-                Sem horários nos próximos {janela} dias para essa escolha. Tente outro barbeiro.
-              </p>
+            {passo === 2 && (
+              <>
+                {dias.erro && <ErroCaixa mensagem={dias.erro} onTentar={dias.recarregar} />}
+                {dias.carregando && (
+                  <div className="flex gap-2 overflow-hidden">
+                    <Skeletons n={8} className="h-24 w-[4.25rem] shrink-0" />
+                  </div>
+                )}
+                {dias.dados && (
+                  <CarrosselDias
+                    hoje={hoje}
+                    janela={janela}
+                    livres={dias.dados}
+                    selecionado={data}
+                    onEscolher={(d) => {
+                      if (d !== data) setHora(null);
+                      setData(d);
+                      setPasso(3);
+                    }}
+                  />
+                )}
+                {dias.dados?.length === 0 && (
+                  <p className="mt-4 text-sm text-zinc-400">
+                    Sem horários nos próximos {janela} dias para essa escolha. Tente outro barbeiro.
+                  </p>
+                )}
+              </>
             )}
-          </>
-        )}
 
-        {passo === 3 && (
-          <>
-            {horarios.erro && <ErroCaixa mensagem={horarios.erro} onTentar={horarios.recarregar} />}
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-              {horarios.carregando && <Skeletons n={12} className="h-12" />}
-              {!horarios.carregando &&
-                horarios.dados?.map((h) => (
-                  <button
-                    key={h.hora}
-                    type="button"
-                    aria-pressed={hora === h.hora}
-                    onClick={() => {
-                      setHora(h.hora);
+            {passo === 3 && (
+              <>
+                {data && (
+                  <p className="-mt-4 mb-6 text-zinc-400 first-letter:uppercase">
+                    {formatarDataLonga(data)}
+                  </p>
+                )}
+                {horarios.erro && (
+                  <ErroCaixa mensagem={horarios.erro} onTentar={horarios.recarregar} />
+                )}
+                {horarios.carregando && (
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                    <Skeletons n={12} className="h-12" />
+                  </div>
+                )}
+                {!horarios.carregando && horarios.dados && horarios.dados.length > 0 && (
+                  <GradeHorarios
+                    horarios={horarios.dados}
+                    selecionada={hora}
+                    onEscolher={(h) => {
+                      setHora(h);
                       setAviso(null);
                       setPasso(4);
                     }}
-                    className={`min-h-12 cursor-pointer rounded-xl border font-semibold transition hover:border-gold-400/60 ${hora === h.hora ? 'border-gold-400 bg-gold-400/10 text-gold-200' : 'border-ink-700 bg-ink-900'}`}
+                  />
+                )}
+                {!horarios.carregando && horarios.dados?.length === 0 && (
+                  <div className="card p-6 text-sm text-zinc-400">
+                    <p>Os horários desse dia acabaram.</p>
+                    <button className="btn-ghost mt-4" onClick={() => setPasso(2)}>
+                      Escolher outro dia
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {passo === 4 && (
+              <form onSubmit={enviar} className="card space-y-5 p-6 sm:p-8" noValidate>
+                <div>
+                  <label htmlFor="nome" className="mb-2 block text-sm font-medium text-zinc-200">
+                    Seu nome
+                  </label>
+                  <input
+                    id="nome"
+                    className="campo"
+                    value={nome}
+                    onChange={(e) => setNome(e.target.value)}
+                    maxLength={60}
+                    autoComplete="name"
+                    required
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="telefone"
+                    className="mb-2 block text-sm font-medium text-zinc-200"
                   >
-                    {h.hora}
-                  </button>
-                ))}
-            </div>
-            {!horarios.carregando && horarios.dados?.length === 0 && (
-              <div className="text-sm text-zinc-400">
-                <p>Os horários desse dia acabaram.</p>
-                <button className="btn-ghost mt-4" onClick={() => setPasso(2)}>
-                  Escolher outro dia
-                </button>
-              </div>
-            )}
-          </>
-        )}
-
-        {passo === 4 && (
-          <form onSubmit={enviar} className="space-y-4" noValidate>
-            <div>
-              <label htmlFor="nome" className="mb-1.5 block text-sm font-medium">
-                Seu nome
-              </label>
-              <input
-                id="nome"
-                className="campo"
-                value={nome}
-                onChange={(e) => setNome(e.target.value)}
-                maxLength={60}
-                autoComplete="name"
-                required
-              />
-            </div>
-            <div>
-              <label htmlFor="telefone" className="mb-1.5 block text-sm font-medium">
-                WhatsApp
-              </label>
-              <input
-                id="telefone"
-                className="campo"
-                type="tel"
-                inputMode="numeric"
-                placeholder="(11) 98765-4321"
-                value={telefone}
-                onChange={(e) => setTelefone(mascararTelefone(e.target.value))}
-                autoComplete="tel-national"
-                aria-describedby="telefone-ajuda"
-                required
-              />
-              <p id="telefone-ajuda" className="mt-1.5 text-xs text-zinc-500">
-                {telefone && !telefoneValido
-                  ? 'Digite o número completo, com DDD.'
-                  : 'É para onde enviamos o lembrete.'}
-              </p>
-            </div>
-            <div>
-              <label htmlFor="obs" className="mb-1.5 block text-sm font-medium">
-                Observação <span className="font-normal text-zinc-500">(opcional)</span>
-              </label>
-              <textarea
-                id="obs"
-                className="campo"
-                rows={2}
-                maxLength={200}
-                value={observacao}
-                onChange={(e) => setObservacao(e.target.value)}
-              />
-            </div>
-            {/* Honeypot: invisível para pessoas, preenchido por robôs. */}
-            <div className="hidden" aria-hidden="true">
-              <label>
-                Site
-                <input
-                  tabIndex={-1}
-                  autoComplete="off"
-                  value={honeypot}
-                  onChange={(e) => setHoneypot(e.target.value)}
-                />
-              </label>
-            </div>
-            <label className="flex cursor-pointer items-start gap-3 text-sm text-zinc-300">
-              <input
-                type="checkbox"
-                className="mt-0.5 h-5 w-5 shrink-0 accent-gold-400"
-                checked={aceite}
-                onChange={(e) => setAceite(e.target.checked)}
-              />
-              <span>
-                Aceito receber o lembrete pelo WhatsApp.{' '}
-                <Link to="/privacidade" target="_blank" className="text-gold-300 underline">
-                  Privacidade
-                </Link>
-              </span>
-            </label>
-
-            {servico && data && hora && (
-              <div className="card flex items-center justify-between gap-4 p-4 text-sm">
-                <span>
-                  <span className="block font-semibold text-zinc-50">{servico.nome}</span>
-                  <span className="text-zinc-400">
-                    {formatarDataLonga(data)} às {hora} · {nomeBarbeiro}
+                    WhatsApp
+                  </label>
+                  <input
+                    id="telefone"
+                    className="campo"
+                    type="tel"
+                    inputMode="numeric"
+                    placeholder="(11) 98765-4321"
+                    value={telefone}
+                    onChange={(e) => setTelefone(mascararTelefone(e.target.value))}
+                    autoComplete="tel-national"
+                    aria-describedby="telefone-ajuda"
+                    required
+                  />
+                  <p
+                    id="telefone-ajuda"
+                    className={`mt-2 text-xs ${telefone && !telefoneValido ? 'text-amber-300' : 'text-zinc-500'}`}
+                  >
+                    {telefone && !telefoneValido
+                      ? 'Digite o número completo, com DDD.'
+                      : 'É para onde enviamos o lembrete.'}
+                  </p>
+                </div>
+                <div>
+                  <label htmlFor="obs" className="mb-2 block text-sm font-medium text-zinc-200">
+                    Observação <span className="font-normal text-zinc-500">(opcional)</span>
+                  </label>
+                  <textarea
+                    id="obs"
+                    className="campo resize-none"
+                    rows={2}
+                    maxLength={200}
+                    placeholder="Ex.: quero manter o comprimento em cima"
+                    value={observacao}
+                    onChange={(e) => setObservacao(e.target.value)}
+                  />
+                </div>
+                {/* Honeypot: invisível para pessoas, preenchido por robôs. */}
+                <div className="hidden" aria-hidden="true">
+                  <label>
+                    Site
+                    <input
+                      tabIndex={-1}
+                      autoComplete="off"
+                      value={honeypot}
+                      onChange={(e) => setHoneypot(e.target.value)}
+                    />
+                  </label>
+                </div>
+                <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 text-sm text-zinc-300">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-5 w-5 shrink-0 accent-gold-400"
+                    checked={aceite}
+                    onChange={(e) => setAceite(e.target.checked)}
+                  />
+                  <span>
+                    Aceito receber o lembrete pelo WhatsApp.{' '}
+                    <Link to="/privacidade" target="_blank" className="text-gold-300 underline">
+                      Privacidade
+                    </Link>
                   </span>
-                </span>
-                <span className="font-display text-lg font-bold text-gold-300">
-                  {formatarPreco(servico.preco)}
-                </span>
-              </div>
+                </label>
+                <button
+                  type="submit"
+                  className="btn-gold w-full py-4 text-base"
+                  disabled={!podeEnviar}
+                >
+                  {enviando ? (
+                    <>
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-ink-950/30 border-t-ink-950" />
+                      Confirmando…
+                    </>
+                  ) : (
+                    <>
+                      Confirmar agendamento <IconeSeta />
+                    </>
+                  )}
+                </button>
+              </form>
             )}
+          </div>
+        </div>
 
-            <button type="submit" className="btn-gold w-full py-3 text-base" disabled={!podeEnviar}>
-              {enviando ? 'Confirmando…' : 'Confirmar agendamento'}
-            </button>
-          </form>
-        )}
+        {/* Resumo: lateral fixa no desktop */}
+        <aside className="hidden lg:block">
+          <div className="sticky top-28">
+            <Resumo
+              servico={servico}
+              barbeiro={barbeiroEscolhido}
+              data={data}
+              hora={hora}
+              passo={passo}
+              irPara={setPasso}
+            />
+          </div>
+        </aside>
       </div>
+
+      {/* Resumo: barra inferior no celular */}
+      {servico && (
+        <div className="vidro fixed inset-x-3 bottom-3 z-30 flex items-center gap-3 rounded-full !bg-ink-950/70 py-2 pr-2 pl-5 lg:hidden">
+          <span className="min-w-0 flex-1 text-sm">
+            <span className="block truncate font-semibold text-zinc-50">{servico.nome}</span>
+            <span className="block truncate text-xs text-zinc-400">
+              {[
+                barbeiroEscolhido?.nome,
+                data && formatarDataLonga(data).split(',')[1]?.trim(),
+                hora,
+              ]
+                .filter(Boolean)
+                .join(' · ') || formatarDuracao(servico.duracao_min)}
+            </span>
+          </span>
+          <span className="rounded-full bg-gold-400/15 px-4 py-2 font-display font-bold text-gold-200">
+            {formatarPreco(servico.preco)}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
 
-function Avatar({ barbeiro }: { barbeiro?: Barbeiro }) {
+function CartaoBarbeiro({
+  barbeiro: b,
+  selecionado,
+  onClick,
+}: {
+  barbeiro: Barbeiro;
+  selecionado: boolean;
+  onClick: () => void;
+}) {
   return (
-    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-gold-400/40 bg-ink-800 font-display text-lg font-bold text-gold-300">
-      {barbeiro ? barbeiro.nome[0] : <IconeUsuario />}
-    </span>
+    <Inclinar
+      className={`card group ${selecionado ? '!border-gold-400/70 !bg-gold-400/[0.08]' : ''}`}
+    >
+      <button
+        type="button"
+        onClick={onClick}
+        aria-pressed={selecionado}
+        data-cursor="Escolher"
+        className="flex w-full cursor-pointer items-center gap-4 p-4 text-left sm:flex-col sm:px-4 sm:pt-7 sm:pb-6 sm:text-center"
+      >
+        <span className="relative">
+          <FotoBarbeiro
+            nome={b.nome}
+            foto={b.foto_url}
+            tamanho="h-16 w-16 sm:h-28 sm:w-28"
+            className="transition duration-500 group-hover:scale-105"
+          />
+          {selecionado && (
+            <span className="absolute -right-1 -bottom-1 flex h-7 w-7 animate-entrar items-center justify-center rounded-full border-2 border-ink-950 bg-gold-400 text-ink-950">
+              <IconeCheck width={14} height={14} />
+            </span>
+          )}
+        </span>
+        <span>
+          <span className="block font-display text-xl font-bold text-zinc-50 sm:text-2xl">
+            {b.nome}
+          </span>
+          {b.instagram && (
+            <span className="mt-0.5 block truncate text-xs text-zinc-500">@{b.instagram}</span>
+          )}
+        </span>
+      </button>
+    </Inclinar>
   );
 }

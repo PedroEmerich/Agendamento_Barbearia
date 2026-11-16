@@ -25,14 +25,19 @@ export default function Login() {
   }
 
   return (
-    <main className="fundo-hero flex min-h-dvh items-center justify-center px-4">
-      <form onSubmit={entrar} className="card w-full max-w-sm space-y-4 p-6">
+    <main className="grao relative isolate flex min-h-dvh items-center justify-center overflow-hidden px-4">
+      <div aria-hidden="true" className="absolute inset-0 -z-10">
+        <div className="grade-fundo absolute inset-0" />
+        <div className="absolute top-1/4 left-1/4 h-72 w-72 animate-flutuar rounded-full bg-gold-500/20 blur-[100px]" />
+        <div className="absolute right-1/4 bottom-1/4 h-72 w-72 animate-flutuar rounded-full bg-amber-700/20 blur-[100px] [animation-delay:-7s]" />
+      </div>
+      <form onSubmit={entrar} className="card w-full max-w-sm animate-entrar space-y-5 p-8">
         <div className="text-center">
-          <Marca />
+          <Marca variante="completa" />
           <h1 className="mt-4 text-lg font-semibold text-zinc-50">Área do barbeiro</h1>
         </div>
         {MODO_DEMO && (
-          <p className="rounded-xl bg-gold-400/10 px-3 py-2 text-xs text-gold-200">
+          <p className="rounded-2xl border border-gold-400/20 bg-gold-400/10 px-4 py-3 text-xs leading-relaxed text-gold-200">
             Demonstração: <strong>admin / demo</strong> vê todos os barbeiros;{' '}
             <strong>renato / demo</strong> vê só a própria agenda.
           </p>
