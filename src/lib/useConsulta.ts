@@ -9,7 +9,11 @@ interface Consulta<T> {
 
 /** Busca dados ao montar e sempre que `deps` mudar. Passe `null` como função para pausar. */
 export function useConsulta<T>(buscar: (() => Promise<T>) | null, deps: unknown[]): Consulta<T> {
-  const [estado, setEstado] = useState<{ dados: T | null; erro: string | null; carregando: boolean }>({
+  const [estado, setEstado] = useState<{
+    dados: T | null;
+    erro: string | null;
+    carregando: boolean;
+  }>({
     dados: null,
     erro: null,
     carregando: buscar !== null,

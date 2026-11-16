@@ -107,7 +107,7 @@ export function Marca({ tamanho = 'md' }: { tamanho?: 'md' | 'lg' }) {
 
 export function ErroCaixa({ mensagem, onTentar }: { mensagem: string; onTentar?: () => void }) {
   return (
-    <div role="alert" className="card border-red-500/30 p-5 text-center">
+    <div role="alert" className="card !border-red-500/30 p-5 text-center">
       <p className="text-sm text-red-200">{mensagem}</p>
       {onTentar && (
         <button className="btn-ghost mt-4" onClick={onTentar}>
@@ -145,8 +145,66 @@ const STATUS: Record<StatusAgendamento, { rotulo: string; classe: string }> = {
 export function SeloStatus({ status }: { status: StatusAgendamento }) {
   const s = STATUS[status];
   return (
-    <span className={`inline-block rounded-full border px-2.5 py-0.5 text-xs font-semibold ${s.classe}`}>
+    <span
+      className={`inline-block rounded-full border px-2.5 py-0.5 text-xs font-semibold ${s.classe}`}
+    >
       {s.rotulo}
+    </span>
+  );
+}
+
+/** Foto redonda do barbeiro com anel dourado; cai para a inicial se não houver foto. */
+export function FotoBarbeiro({
+  nome,
+  foto,
+  tamanho = 'h-12 w-12',
+  className = '',
+}: {
+  nome: string;
+  foto?: string;
+  tamanho?: string;
+  className?: string;
+}) {
+  return (
+    <span
+      className={`relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-ink-800 p-[2px] ${tamanho} ${className}`}
+      style={{
+        background: 'conic-gradient(from 210deg, #f0dca6, #9c7429, #e6c77a, #6b4d17, #f0dca6)',
+      }}
+    >
+      {foto ? (
+        <img
+          src={foto}
+          alt={`Foto de ${nome}`}
+          loading="lazy"
+          decoding="async"
+          className="h-full w-full rounded-full object-cover"
+        />
+      ) : (
+        <span className="flex h-full w-full items-center justify-center rounded-full bg-ink-900 font-display font-bold text-gold-300">
+          {nome[0]}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** Selo circular com texto girando em volta. */
+export function SeloGiratorio({ texto, className = '' }: { texto: string; className?: string }) {
+  return (
+    <span
+      className={`relative items-center justify-center ${className}`}
+      aria-hidden="true"
+    >
+      <svg viewBox="0 0 120 120" className="absolute inset-0 h-full w-full animate-girar">
+        <defs>
+          <path id="selo-circulo" d="M60,60 m-46,0 a46,46 0 1,1 92,0 a46,46 0 1,1 -92,0" />
+        </defs>
+        <text className="fill-gold-300 text-[10.5px] font-semibold tracking-[0.32em] uppercase">
+          <textPath href="#selo-circulo">{texto}</textPath>
+        </text>
+      </svg>
+      <IconeTesoura width={26} height={26} className="text-gold-300" />
     </span>
   );
 }

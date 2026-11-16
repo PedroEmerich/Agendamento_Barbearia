@@ -48,12 +48,19 @@ export const CONFIG: ConfigPublica = {
     { dias: 'Sábado', horario: '09:00 – 18:00' },
     { dias: 'Domingo e segunda', horario: 'Fechado' },
   ],
+  horario_semana: [
+    ...[2, 3, 4, 5].map((d) => ({ dia_semana: d, abre: '09:30', fecha: '20:00' })),
+    { dia_semana: 6, abre: '09:00', fecha: '18:00' },
+  ],
 };
 
+const foto = (nome: string) => `${import.meta.env.BASE_URL}barbeiros/${nome}.webp`;
+
+/** Na ordem em que aparecem no site. */
 const BARBEIROS: Barbeiro[] = [
-  { id: 'b1', nome: 'Renato', instagram: 'renatoneves.ug' },
-  { id: 'b2', nome: 'VL', instagram: 'vlducorte' },
-  { id: 'b3', nome: 'Davi', instagram: 'davi_undergroundbarbershop' },
+  { id: 'b1', nome: 'Davi', instagram: 'davi_undergroundbarbershop', foto_url: foto('davi') },
+  { id: 'b2', nome: 'Renato', instagram: 'renatoneves.ug', foto_url: foto('renato') },
+  { id: 'b3', nome: 'Renan', instagram: 'vlducorte', foto_url: foto('renan') },
 ];
 
 const SERVICOS: Servico[] = [
@@ -109,8 +116,22 @@ const EXPEDIENTE: Record<number, { jornada: Intervalo; pausa: Intervalo } | unde
 };
 
 const USUARIOS: (Usuario & { login: string; senha: string })[] = [
-  { id: 'u1', nome: 'Administrador', login: 'admin', senha: 'demo', papel: 'ADMIN', barbeiro_id: null },
-  { id: 'u2', nome: 'Renato', login: 'renato', senha: 'demo', papel: 'BARBEIRO', barbeiro_id: 'b1' },
+  {
+    id: 'u1',
+    nome: 'Administrador',
+    login: 'admin',
+    senha: 'demo',
+    papel: 'ADMIN',
+    barbeiro_id: null,
+  },
+  {
+    id: 'u2',
+    nome: 'Renato',
+    login: 'renato',
+    senha: 'demo',
+    papel: 'BARBEIRO',
+    barbeiro_id: 'b2',
+  },
 ];
 
 // ---------------------------------------------------------------- persistência
@@ -119,7 +140,7 @@ interface Registro extends AgendamentoPainel {
   token: string;
 }
 
-const CHAVE = 'ug_demo_v1';
+const CHAVE = 'ug_demo_v2';
 let memoria: Registro[] | null = null;
 
 function aleatorio(tamanho: number, alfabeto: string): string {
@@ -133,7 +154,15 @@ const novoToken = () => aleatorio(40, 'abcdefghijklmnopqrstuvwxyz0123456789');
 
 /** Agenda de exemplo para o painel não aparecer vazio. */
 function semear(): Registro[] {
-  const clientes = ['João P.', 'Lucas M.', 'Rafael S.', 'Bruno T.', 'Matheus R.', 'Gustavo A.', 'Caio F.'];
+  const clientes = [
+    'João P.',
+    'Lucas M.',
+    'Rafael S.',
+    'Bruno T.',
+    'Matheus R.',
+    'Gustavo A.',
+    'Caio F.',
+  ];
   const grade: [string, string, string, StatusAgendamento][] = [
     ['b1', '10:00', 's1', 'CONFIRMADO'],
     ['b1', '11:00', 's3', 'AGENDADO'],
@@ -150,7 +179,9 @@ function semear(): Registro[] {
   let n = 0;
   while (dias < 3) {
     if (EXPEDIENTE[diaSemana(data)]) {
-      for (const [barbeiroId, hora, servicoId, status] of grade.filter((_, i) => (i + dias) % 3 !== 2)) {
+      for (const [barbeiroId, hora, servicoId, status] of grade.filter(
+        (_, i) => (i + dias) % 3 !== 2,
+      )) {
         const servico = SERVICOS.find((s) => s.id === servicoId)!;
         registros.push({
           id: `seed-${n}`,
@@ -266,6 +297,7 @@ function paraCliente(r: Registro): AgendamentoCliente {
     codigo: r.codigo,
     token: r.token,
     barbeiro_nome: BARBEIROS.find((b) => b.id === r.barbeiro_id)?.nome ?? '',
+    barbeiro_foto: BARBEIROS.find((b) => b.id === r.barbeiro_id)?.foto_url,
     servico_nome: r.servico_nome,
     duracao_min: r.duracao_min,
     preco: r.preco,
@@ -287,7 +319,12 @@ function paraPainel(r: Registro): AgendamentoPainel {
 function autenticar(authToken: unknown): Usuario {
   const usuario = USUARIOS.find((u) => `demo.${u.id}` === authToken);
   if (!usuario) throw new ErroApi('NAO_AUTORIZADO', 'Sessão expirada. Entre novamente.');
-  return { id: usuario.id, nome: usuario.nome, papel: usuario.papel, barbeiro_id: usuario.barbeiro_id };
+  return {
+    id: usuario.id,
+    nome: usuario.nome,
+    papel: usuario.papel,
+    barbeiro_id: usuario.barbeiro_id,
+  };
 }
 
 // ---------------------------------------------------------------- ações
@@ -299,7 +336,8 @@ const acoes: Record<string, (p: Payload, authToken?: string | null) => unknown> 
 
   listarServicos: () => SERVICOS,
 
-  listarBarbeiros: (p) => (p.servicoId ? barbeirosDoServico(buscarServico(p.servicoId)) : BARBEIROS),
+  listarBarbeiros: (p) =>
+    p.servicoId ? barbeirosDoServico(buscarServico(p.servicoId)) : BARBEIROS,
 
   getDiasDisponiveis: (p) => {
     const servico = buscarServico(p.servicoId);
@@ -310,7 +348,8 @@ const acoes: Record<string, (p: Payload, authToken?: string | null) => unknown> 
     return dias;
   },
 
-  getHorarios: (p) => horariosDoDia(buscarServico(p.servicoId), String(p.barbeiroId), String(p.data)),
+  getHorarios: (p) =>
+    horariosDoDia(buscarServico(p.servicoId), String(p.barbeiroId), String(p.data)),
 
   criarAgendamento: (p) => {
     if (p.honeypot) throw new ErroApi('VALIDACAO', 'Não foi possível concluir.');
@@ -341,7 +380,8 @@ const acoes: Record<string, (p: Payload, authToken?: string | null) => unknown> 
 
     // "Qualquer barbeiro": o que tiver menos atendimentos no dia.
     const cargaNoDia = (id: string) =>
-      registros.filter((r) => r.barbeiro_id === id && r.data === data && r.status !== 'CANCELADO').length;
+      registros.filter((r) => r.barbeiro_id === id && r.data === data && r.status !== 'CANCELADO')
+        .length;
     const barbeiroId = [...slot.barbeiroIds].sort((a, b) => cargaNoDia(a) - cargaNoDia(b))[0];
 
     const registro: Registro = {
@@ -418,7 +458,11 @@ const acoes: Record<string, (p: Payload, authToken?: string | null) => unknown> 
   },
 };
 
-export async function chamarMock<T>(action: string, payload: Payload, authToken?: string | null): Promise<T> {
+export async function chamarMock<T>(
+  action: string,
+  payload: Payload,
+  authToken?: string | null,
+): Promise<T> {
   // Simula a latência do Apps Script para os estados de carregamento aparecerem.
   await new Promise((r) => setTimeout(r, 350 + Math.random() * 350));
   const acao = acoes[action];
