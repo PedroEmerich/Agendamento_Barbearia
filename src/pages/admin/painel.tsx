@@ -6,6 +6,7 @@ import { Navigate, NavLink, Outlet, useNavigate, useOutletContext } from 'react-
 import { FotoBarbeiro, IconeCheck, IconeWhatsapp, SeloStatus } from '../../components/ui';
 import { SeloPagamento } from '../../components/Pagamento';
 import { api, MODO_DEMO, sessao } from '../../lib/api';
+import { sair as sairDaConta } from '../../lib/conta';
 import { agoraSP, diaSemana, formatarPreco, somarDias } from '../../lib/datas';
 import { formatarTelefone } from '../../lib/telefone';
 import { useConsulta } from '../../lib/useConsulta';
@@ -299,13 +300,15 @@ export default function LayoutPainel() {
   }, []);
 
   if (!autenticado || usuario.erro) {
-    sessao.gravar(null);
-    return <Navigate to="/admin/login" replace />;
+    sairDaConta();
+    return <Navigate to="/entrar?voltar=/admin" replace />;
   }
+  // Cliente logado não entra no painel: vai para a área dele.
+  if (usuario.dados?.papel === 'CLIENTE') return <Navigate to="/minha-conta" replace />;
 
   const sair = () => {
-    sessao.gravar(null);
-    navegar('/admin/login');
+    sairDaConta();
+    navegar('/entrar');
   };
 
   const pronto = usuario.dados && barbeiros.dados && config.dados;

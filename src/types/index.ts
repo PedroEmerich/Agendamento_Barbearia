@@ -1,7 +1,7 @@
 export type StatusAgendamento =
   'AGENDADO' | 'CONFIRMADO' | 'CANCELADO' | 'CONCLUIDO' | 'NAO_COMPARECEU';
 
-export type Papel = 'ADMIN' | 'BARBEIRO';
+export type Papel = 'ADMIN' | 'BARBEIRO' | 'CLIENTE';
 
 export interface DiaFuncionamento {
   dias: string;
@@ -92,6 +92,8 @@ export interface AgendamentoPainel {
   /** Preenchido quando o horário usa um crédito de plano. */
   assinatura_id?: string | null;
   pagamento?: Pagamento;
+  /** Conta do cliente que marcou (quando marcou logado). */
+  cliente_id?: string | null;
 }
 
 export interface Usuario {
@@ -99,6 +101,16 @@ export interface Usuario {
   nome: string;
   papel: Papel;
   barbeiro_id: string | null;
+  email?: string;
+  /** Só para clientes (WhatsApp, só dígitos com DDI). */
+  telefone?: string;
+}
+
+/** Área do cliente: o que é dele (agendamentos e planos). */
+export interface MinhaConta {
+  usuario: Usuario;
+  agendamentos: AgendamentoCliente[];
+  assinaturas: { token: string; plano_nome: string; status: StatusAssinatura }[];
 }
 
 export type CodigoErro =
@@ -150,6 +162,8 @@ export interface Assinatura {
   pagamento_forma?: FormaPagamento;
   /** Cobrança do mês aguardando pagamento online. */
   cobranca_pendente?: string | null;
+  /** Conta do cliente dono do plano. */
+  cliente_id?: string | null;
 }
 
 /** Assinatura com o uso de créditos do mês (painel). */

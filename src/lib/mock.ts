@@ -30,6 +30,7 @@ import {
   cicloDoMes,
   encaixarNaAgenda,
   gerarHorariosDoPlano,
+  horasFixasLivres,
   JANELA_ASSINANTE_DIAS,
   mesDe,
   usoNoMes,
@@ -140,11 +141,13 @@ const EXPEDIENTE: Record<number, { jornada: Intervalo; pausa: Intervalo } | unde
   6: { jornada: { inicio: 540, fim: 1080 }, pausa: { inicio: 720, fim: 780 } },
 };
 
-const USUARIOS: (Usuario & { login: string; senha: string })[] = [
+/** Equipe (demonstração: senha "demo"). Entra com o e-mail ou com o login curto. */
+const USUARIOS: (Usuario & { login: string; senha: string; email: string })[] = [
   {
     id: 'u1',
     nome: 'Administrador',
     login: 'admin',
+    email: 'admin@underground.demo',
     senha: 'demo',
     papel: 'ADMIN',
     barbeiro_id: null,
@@ -153,13 +156,68 @@ const USUARIOS: (Usuario & { login: string; senha: string })[] = [
     id: 'u2',
     nome: 'Renato',
     login: 'renato',
+    email: 'renato@underground.demo',
     senha: 'demo',
     papel: 'BARBEIRO',
     barbeiro_id: 'b2',
   },
-  { id: 'u3', nome: 'Davi', login: 'davi', senha: 'demo', papel: 'BARBEIRO', barbeiro_id: 'b1' },
-  { id: 'u4', nome: 'Renan', login: 'renan', senha: 'demo', papel: 'BARBEIRO', barbeiro_id: 'b3' },
+  {
+    id: 'u3',
+    nome: 'Davi',
+    login: 'davi',
+    email: 'davi@underground.demo',
+    senha: 'demo',
+    papel: 'BARBEIRO',
+    barbeiro_id: 'b1',
+  },
+  {
+    id: 'u4',
+    nome: 'Renan',
+    login: 'renan',
+    email: 'renan@underground.demo',
+    senha: 'demo',
+    papel: 'BARBEIRO',
+    barbeiro_id: 'b3',
+  },
 ];
+
+/** Conta de cliente. A senha fica só como hash SHA-256 com sal, nunca em texto. */
+interface Conta {
+  id: string;
+  nome: string;
+  email: string;
+  telefone: string;
+  salt: string;
+  hash: string;
+  criado_em: string;
+}
+
+/** Cliente de exemplo, dono do plano do Marcos (senha "demo"). */
+const CONTA_EXEMPLO = {
+  id: 'c-marcos',
+  nome: 'Marcos Vieira',
+  email: 'marcos@cliente.demo',
+  telefone: '5511981112233',
+};
+
+async function hashSenha(salt: string, senha: string): Promise<string> {
+  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(salt + senha));
+  return Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** Compara sem atalho (tempo constante), como o back-end real deve fazer. */
+function iguais(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let d = 0;
+  for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return d === 0;
+}
+
+const normalizarEmail = (e: unknown) =>
+  String(e ?? '')
+    .trim()
+    .toLowerCase();
+const emailValido = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e) && e.length <= 120;
 
 export const PLANOS: Plano[] = [
   {
@@ -221,7 +279,9 @@ function assinaturasDeExemplo(hoje: string): Assinatura[] {
     ...extra,
   });
   return [
-    base('a1', 'Marcos Vieira', '5511981112233', 'p1', 'b1', [4, '18:00'], 130),
+    base('a1', 'Marcos Vieira', '5511981112233', 'p1', 'b1', [4, '18:00'], 130, {
+      cliente_id: CONTA_EXEMPLO.id,
+    }),
     base('a2', 'Thiago Rocha', '5511982223344', 'p2', 'b2', [2, '19:00'], 120),
     base('a3', 'Felipe Andrade', '5511983334455', 'p1', 'b2', [6, '10:00'], 95),
     base('a4', 'Gustavo Lima', '5511984445566', 'p1', 'b3', [3, '18:30'], 80),
@@ -252,6 +312,8 @@ interface Salvo {
   assinaturas?: Assinatura[];
   /** Mudanças nas assinaturas de exemplo (status, pagamento, dia fixo). */
   alteracoesAssinatura?: Record<string, Partial<Assinatura>>;
+  /** Contas de clientes criadas na demonstração. */
+  contas?: Conta[];
   /** Cobranças simuladas (na demonstração não há gateway). */
   cobrancas?: Record<string, Cobranca & { referencia: string }>;
 }
@@ -303,6 +365,7 @@ function carregar(): Registro[] {
     hoje: agora.data,
     agoraMin: agora.minutos,
     simularUso: assinaturasDeExemplo(agora.data).map((a) => a.id),
+    ocupadosExternos: salvo.criados.filter((r) => !r.assinatura_id && r.status !== 'CANCELADO'),
   });
   const agenda = encaixarNaAgenda(semente, doPlano);
   for (const r of agenda) {
@@ -450,6 +513,7 @@ function paraPainel(r: Registro): AgendamentoPainel {
   return copia as AgendamentoPainel;
 }
 
+/** Equipe (admin e barbeiros). Token de cliente não serve aqui. */
 function autenticar(authToken: unknown): Usuario {
   const usuario = USUARIOS.find((u) => `demo.${u.id}` === authToken);
   if (!usuario) throw new ErroApi('NAO_AUTORIZADO', 'Sessão expirada. Entre novamente.');
@@ -458,7 +522,40 @@ function autenticar(authToken: unknown): Usuario {
     nome: usuario.nome,
     papel: usuario.papel,
     barbeiro_id: usuario.barbeiro_id,
+    email: usuario.email,
   };
+}
+
+function contas(): (Omit<Conta, 'salt' | 'hash'> & Partial<Conta>)[] {
+  carregar();
+  return [{ ...CONTA_EXEMPLO, criado_em: '' }, ...(salvo.contas ?? [])];
+}
+
+const paraUsuarioCliente = (c: {
+  id: string;
+  nome: string;
+  email: string;
+  telefone: string;
+}): Usuario => ({
+  id: c.id,
+  nome: c.nome,
+  papel: 'CLIENTE',
+  barbeiro_id: null,
+  email: c.email,
+  telefone: c.telefone,
+});
+
+function autenticarCliente(authToken: unknown): Usuario {
+  const conta = contas().find((c) => `cli.${c.id}` === authToken);
+  if (!conta) throw new ErroApi('NAO_AUTORIZADO', 'Entre ou crie sua conta para continuar.');
+  return paraUsuarioCliente(conta);
+}
+
+/** Qualquer usuário logado (equipe ou cliente). */
+function autenticarQualquer(authToken: unknown): Usuario {
+  return String(authToken ?? '').startsWith('cli.')
+    ? autenticarCliente(authToken)
+    : autenticar(authToken);
 }
 
 // ---------------------------------------------------------------- planos
@@ -651,374 +748,467 @@ function paraAssinaturaPainel(a: Assinatura): AssinaturaPainel {
 
 type Payload = Record<string, unknown>;
 
-const acoes: Record<string, (p: Payload, authToken?: string | null) => unknown> = {
-  getConfigPublica: () => CONFIG,
+const acoes: Record<string, (p: Payload, authToken?: string | null) => unknown | Promise<unknown>> =
+  {
+    getConfigPublica: () => CONFIG,
 
-  listarServicos: () => SERVICOS,
+    listarServicos: () => SERVICOS,
 
-  listarBarbeiros: (p) =>
-    p.servicoId ? barbeirosDoServico(buscarServico(p.servicoId)) : BARBEIROS,
+    listarBarbeiros: (p) =>
+      p.servicoId ? barbeirosDoServico(buscarServico(p.servicoId)) : BARBEIROS,
 
-  // Com `assinaturaToken`, a janela é a do assinante (mais longa que a do público).
-  getDiasDisponiveis: (p) => {
-    const servico = buscarServico(p.servicoId);
-    const janela = janelaPara(p.assinaturaToken);
-    const dias: string[] = [];
-    for (let d = String(p.de); d <= String(p.ate); d = somarDias(d, 1)) {
-      if (horariosDoDia(servico, String(p.barbeiroId), d, janela).length) dias.push(d);
-    }
-    return dias;
-  },
-
-  getHorarios: (p) =>
-    horariosDoDia(
-      buscarServico(p.servicoId),
-      String(p.barbeiroId),
-      String(p.data),
-      janelaPara(p.assinaturaToken),
-    ),
-
-  listarPlanos: () => PLANOS,
-
-  /** Contratação do plano pelo próprio cliente (página /assinar). Ativa após o pagamento. */
-  contratarPlano: (p) => {
-    const nome = String(p.clienteNome ?? '').trim();
-    const telefone = normalizarTelefone(String(p.clienteTelefone ?? ''));
-    if (p.honeypot) throw new ErroApi('VALIDACAO', 'Não foi possível concluir.');
-    if (nome.length < 2 || nome.length > 60) throw new ErroApi('VALIDACAO', 'Informe seu nome.');
-    if (!telefone) throw new ErroApi('VALIDACAO', 'Informe um WhatsApp válido, com DDD.');
-    if (!PLANOS.some((x) => x.id === p.planoId)) throw new ErroApi('VALIDACAO', 'Plano inválido.');
-    if (!BARBEIROS.some((x) => x.id === p.barbeiroId))
-      throw new ErroApi('VALIDACAO', 'Escolha o barbeiro.');
-    const fixo = (p.fixo as Assinatura['fixo']) ?? null;
-    if (fixo) {
-      const dia = EXPEDIENTE[fixo.dia_semana];
-      const servico = buscarServico(PLANOS.find((x) => x.id === p.planoId)!.servico_id);
-      const ini = hhmmParaMin(fixo.hora);
-      const fim = ini + servico.duracao_min;
-      if (!dia) throw new ErroApi('VALIDACAO', 'A barbearia não abre nesse dia.');
-      if (
-        ini < dia.jornada.inicio ||
-        fim > dia.jornada.fim ||
-        (ini < dia.pausa.fim && dia.pausa.inicio < fim)
-      ) {
-        throw new ErroApi('VALIDACAO', 'Esse horário fica fora do expediente.');
+    // Com `assinaturaToken`, a janela é a do assinante (mais longa que a do público).
+    getDiasDisponiveis: (p) => {
+      const servico = buscarServico(p.servicoId);
+      const janela = janelaPara(p.assinaturaToken);
+      const dias: string[] = [];
+      for (let d = String(p.de); d <= String(p.ate); d = somarDias(d, 1)) {
+        if (horariosDoDia(servico, String(p.barbeiroId), d, janela).length) dias.push(d);
       }
-    }
-    const hoje = agoraSP().data;
-    const forma: FormaPagamento = p.formaPagamento === 'ONLINE' ? 'ONLINE' : 'NA_BARBEARIA';
-    const nova: Assinatura = {
-      id: `n${novoToken().slice(0, 8)}`,
-      token: novoToken(),
-      cliente_nome: nome,
-      cliente_telefone: telefone,
-      plano_id: String(p.planoId),
-      barbeiro_id: String(p.barbeiroId),
-      fixo,
-      status: 'AGUARDANDO_PAGAMENTO',
-      inicio: hoje,
-      pago_ate: '',
-      pagamento_forma: forma,
-      cobranca_pendente: null,
-    };
-    salvo.assinaturas = [...(salvo.assinaturas ?? []), nova];
-    salvar();
-    memoria = null;
-    carregar();
-    return { token: nova.token };
-  },
+      return dias;
+    },
 
-  /**
-   * Mesmo contrato do /api/pagamentos real (Asaas): o valor sai daqui, não do navegador.
-   * Se já existe cobrança pendente para o mesmo item, devolve a mesma.
-   */
-  iniciarPagamento: (p) => {
-    if (!normalizarCpf(String(p.cpf ?? '')))
-      throw new ErroApi('VALIDACAO', 'Informe um CPF válido.');
-    const metodo: MetodoPagamento = p.metodo === 'CARTAO' ? 'CARTAO' : 'PIX';
-    if (p.tipo === 'assinatura') {
-      const a = assinaturaPorToken(p.token);
-      const existente = a.cobranca_pendente && salvo.cobrancas?.[a.cobranca_pendente];
-      if (existente && existente.status === 'PENDENTE') return existente;
-      const plano = planoDe(a);
-      const c = novaCobrancaSimulada(
-        `as:${a.id}`,
-        plano.preco_mensal,
-        `${plano.nome} (mensal)`,
-        metodo,
-        true,
-      );
-      alterarAssinatura(a.id, { cobranca_pendente: c.id, pagamento_forma: 'ONLINE' });
-      return c;
-    }
-    const r = carregar().find((x) => x.token === p.token);
-    if (!r || r.assinatura_id) throw new ErroApi('NAO_ENCONTRADO', 'Agendamento não encontrado.');
-    if (r.pagamento?.status === 'PAGO')
-      throw new ErroApi('VALIDACAO', 'Este horário já está pago.');
-    const existente = r.pagamento?.cobranca_id && salvo.cobrancas?.[r.pagamento.cobranca_id];
-    if (existente && existente.status === 'PENDENTE') return existente;
-    const c = novaCobrancaSimulada(
-      `ag:${r.id}`,
-      r.preco,
-      `${r.servico_nome} — ${r.data} ${r.hora_inicio}`,
-      metodo,
-      false,
-    );
-    r.pagamento = { forma: 'ONLINE', status: 'PENDENTE', metodo, cobranca_id: c.id };
-    salvar();
-    return c;
-  },
+    getHorarios: (p) =>
+      horariosDoDia(
+        buscarServico(p.servicoId),
+        String(p.barbeiroId),
+        String(p.data),
+        janelaPara(p.assinaturaToken),
+      ),
 
-  consultarPagamento: (p) => {
-    const c = salvo.cobrancas?.[String(p.id)];
-    if (!c) throw new ErroApi('NAO_ENCONTRADO', 'Cobrança não encontrada.');
-    return c;
-  },
+    listarPlanos: () => PLANOS,
 
-  /** Só na demonstração: faz o papel do webhook do Asaas confirmando o pagamento. */
-  simularPagamento: (p) => {
-    const c = salvo.cobrancas?.[String(p.id)];
-    if (!c) throw new ErroApi('NAO_ENCONTRADO', 'Cobrança não encontrada.');
-    c.status = 'PAGO';
-    const [tipo, id] = c.referencia.split(':');
-    if (tipo === 'ag') {
-      const r = carregar().find((x) => x.id === id);
-      if (r?.pagamento) r.pagamento = { ...r.pagamento, status: 'PAGO' };
-    } else {
-      alterarAssinatura(id, {
-        status: 'ATIVA',
-        pago_ate: mesDe(agoraSP().data),
-        cobranca_pendente: null,
+    /** Horários que ainda podem ser dia fixo (para a tela de contratação). */
+    horariosFixosLivres: (p) => {
+      carregar();
+      return horasFixasLivres({
+        assinaturas: assinaturasMem,
+        planos: PLANOS,
+        servicos: SERVICOS,
+        expediente: EXPEDIENTE,
+        planoId: String(p.planoId),
+        barbeiroId: String(p.barbeiroId),
+        diaSemana: Number(p.diaSemana),
+        intervaloMin: CONFIG.intervalo_slot_min,
       });
-    }
-    salvar();
-    return c;
-  },
+    },
 
-  getAssinaturaPorToken: (p) => paraAssinaturaCliente(assinaturaPorToken(p.token)),
+    /** Contratação do plano pelo próprio cliente (página /assinar). Ativa após o pagamento. */
+    contratarPlano: (p, authToken) => {
+      const cliente = autenticarCliente(authToken);
+      const nome = cliente.nome;
+      const telefone = cliente.telefone ?? null;
+      if (p.honeypot) throw new ErroApi('VALIDACAO', 'Não foi possível concluir.');
+      if (nome.length < 2 || nome.length > 60) throw new ErroApi('VALIDACAO', 'Informe seu nome.');
+      if (!telefone) throw new ErroApi('VALIDACAO', 'Informe um WhatsApp válido, com DDD.');
+      if (!PLANOS.some((x) => x.id === p.planoId))
+        throw new ErroApi('VALIDACAO', 'Plano inválido.');
+      if (!BARBEIROS.some((x) => x.id === p.barbeiroId))
+        throw new ErroApi('VALIDACAO', 'Escolha o barbeiro.');
+      const fixo = (p.fixo as Assinatura['fixo']) ?? null;
+      if (fixo) {
+        const dia = EXPEDIENTE[fixo.dia_semana];
+        const servico = buscarServico(PLANOS.find((x) => x.id === p.planoId)!.servico_id);
+        const ini = hhmmParaMin(fixo.hora);
+        const fim = ini + servico.duracao_min;
+        if (!dia) throw new ErroApi('VALIDACAO', 'A barbearia não abre nesse dia.');
+        if (
+          ini < dia.jornada.inicio ||
+          fim > dia.jornada.fim ||
+          (ini < dia.pausa.fim && dia.pausa.inicio < fim)
+        ) {
+          throw new ErroApi('VALIDACAO', 'Esse horário fica fora do expediente.');
+        }
+        carregar();
+        const livres = horasFixasLivres({
+          assinaturas: assinaturasMem,
+          planos: PLANOS,
+          servicos: SERVICOS,
+          expediente: EXPEDIENTE,
+          planoId: String(p.planoId),
+          barbeiroId: String(p.barbeiroId),
+          diaSemana: fixo.dia_semana,
+          intervaloMin: CONFIG.intervalo_slot_min,
+        });
+        if (!livres.includes(fixo.hora)) {
+          throw new ErroApi(
+            'SLOT_INDISPONIVEL',
+            'Esse dia fixo já é de outro assinante. Escolha outro horário.',
+          );
+        }
+      }
+      const hoje = agoraSP().data;
+      const forma: FormaPagamento = p.formaPagamento === 'ONLINE' ? 'ONLINE' : 'NA_BARBEARIA';
+      const nova: Assinatura = {
+        id: `n${novoToken().slice(0, 8)}`,
+        token: novoToken(),
+        cliente_nome: nome,
+        cliente_telefone: telefone,
+        plano_id: String(p.planoId),
+        barbeiro_id: String(p.barbeiroId),
+        fixo,
+        status: 'AGUARDANDO_PAGAMENTO',
+        inicio: hoje,
+        pago_ate: '',
+        pagamento_forma: forma,
+        cobranca_pendente: null,
+        cliente_id: cliente.id,
+      };
+      salvo.assinaturas = [...(salvo.assinaturas ?? []), nova];
+      salvar();
+      memoria = null;
+      carregar();
+      return { token: nova.token };
+    },
 
-  /**
-   * Troca um horário do plano por outro (mais cedo ou mais tarde). É uma operação só:
-   * o novo horário é reservado e o antigo liberado juntos, então o crédito nunca se perde.
-   */
-  trocarHorarioAssinatura: (p) => {
-    const a = assinaturaPorToken(p.token);
-    exigirAtiva(a);
-    const antigo = horarioDoPlano(a, p.agendamentoId);
-    if (minutosAte(antigo) < ANTECEDENCIA_TROCA_MIN) {
-      throw new ErroApi(
-        'CANCELAMENTO_FORA_DO_PRAZO',
-        `Trocas vão até ${ANTECEDENCIA_TROCA_MIN / 60}h antes do horário. Fale com a barbearia.`,
+    /**
+     * Mesmo contrato do /api/pagamentos real (Asaas): o valor sai daqui, não do navegador.
+     * Se já existe cobrança pendente para o mesmo item, devolve a mesma.
+     */
+    iniciarPagamento: (p) => {
+      if (!normalizarCpf(String(p.cpf ?? '')))
+        throw new ErroApi('VALIDACAO', 'Informe um CPF válido.');
+      const metodo: MetodoPagamento = p.metodo === 'CARTAO' ? 'CARTAO' : 'PIX';
+      if (p.tipo === 'assinatura') {
+        const a = assinaturaPorToken(p.token);
+        const existente = a.cobranca_pendente && salvo.cobrancas?.[a.cobranca_pendente];
+        if (existente && existente.status === 'PENDENTE') return existente;
+        const plano = planoDe(a);
+        const c = novaCobrancaSimulada(
+          `as:${a.id}`,
+          plano.preco_mensal,
+          `${plano.nome} (mensal)`,
+          metodo,
+          true,
+        );
+        alterarAssinatura(a.id, { cobranca_pendente: c.id, pagamento_forma: 'ONLINE' });
+        return c;
+      }
+      const r = carregar().find((x) => x.token === p.token);
+      if (!r || r.assinatura_id) throw new ErroApi('NAO_ENCONTRADO', 'Agendamento não encontrado.');
+      if (r.pagamento?.status === 'PAGO')
+        throw new ErroApi('VALIDACAO', 'Este horário já está pago.');
+      const existente = r.pagamento?.cobranca_id && salvo.cobrancas?.[r.pagamento.cobranca_id];
+      if (existente && existente.status === 'PENDENTE') return existente;
+      const c = novaCobrancaSimulada(
+        `ag:${r.id}`,
+        r.preco,
+        `${r.servico_nome} — ${r.data} ${r.hora_inicio}`,
+        metodo,
+        false,
       );
-    }
-    const novo = reservarPeloPlano(a, String(p.data), String(p.hora), antigo.id);
-    mudarStatus(antigo, 'CANCELADO');
-    return paraCliente(novo);
-  },
+      r.pagamento = { forma: 'ONLINE', status: 'PENDENTE', metodo, cobranca_id: c.id };
+      salvar();
+      return c;
+    },
 
-  /** "Não vou nesta semana": libera o horário e devolve o crédito. */
-  cancelarHorarioAssinatura: (p) => {
-    const a = assinaturaPorToken(p.token);
-    const r = horarioDoPlano(a, p.agendamentoId);
-    if (minutosAte(r) < ANTECEDENCIA_TROCA_MIN) {
-      throw new ErroApi(
-        'CANCELAMENTO_FORA_DO_PRAZO',
-        'Faltam menos de 2h para o horário. Fale com a barbearia.',
+    consultarPagamento: (p) => {
+      const c = salvo.cobrancas?.[String(p.id)];
+      if (!c) throw new ErroApi('NAO_ENCONTRADO', 'Cobrança não encontrada.');
+      return c;
+    },
+
+    /** Só na demonstração: faz o papel do webhook do Asaas confirmando o pagamento. */
+    simularPagamento: (p) => {
+      const c = salvo.cobrancas?.[String(p.id)];
+      if (!c) throw new ErroApi('NAO_ENCONTRADO', 'Cobrança não encontrada.');
+      c.status = 'PAGO';
+      const [tipo, id] = c.referencia.split(':');
+      if (tipo === 'ag') {
+        const r = carregar().find((x) => x.id === id);
+        if (r?.pagamento) r.pagamento = { ...r.pagamento, status: 'PAGO' };
+      } else {
+        alterarAssinatura(id, {
+          status: 'ATIVA',
+          pago_ate: mesDe(agoraSP().data),
+          cobranca_pendente: null,
+        });
+      }
+      salvar();
+      return c;
+    },
+
+    getAssinaturaPorToken: (p) => paraAssinaturaCliente(assinaturaPorToken(p.token)),
+
+    /**
+     * Troca um horário do plano por outro (mais cedo ou mais tarde). É uma operação só:
+     * o novo horário é reservado e o antigo liberado juntos, então o crédito nunca se perde.
+     */
+    trocarHorarioAssinatura: (p) => {
+      const a = assinaturaPorToken(p.token);
+      exigirAtiva(a);
+      const antigo = horarioDoPlano(a, p.agendamentoId);
+      if (minutosAte(antigo) < ANTECEDENCIA_TROCA_MIN) {
+        throw new ErroApi(
+          'CANCELAMENTO_FORA_DO_PRAZO',
+          `Trocas vão até ${ANTECEDENCIA_TROCA_MIN / 60}h antes do horário. Fale com a barbearia.`,
+        );
+      }
+      const novo = reservarPeloPlano(a, String(p.data), String(p.hora), antigo.id);
+      mudarStatus(antigo, 'CANCELADO');
+      return paraCliente(novo);
+    },
+
+    /** "Não vou nesta semana": libera o horário e devolve o crédito. */
+    cancelarHorarioAssinatura: (p) => {
+      const a = assinaturaPorToken(p.token);
+      const r = horarioDoPlano(a, p.agendamentoId);
+      if (minutosAte(r) < ANTECEDENCIA_TROCA_MIN) {
+        throw new ErroApi(
+          'CANCELAMENTO_FORA_DO_PRAZO',
+          'Faltam menos de 2h para o horário. Fale com a barbearia.',
+        );
+      }
+      mudarStatus(r, 'CANCELADO');
+      return paraAssinaturaCliente(a);
+    },
+
+    /** Usa um crédito livre do mês num horário escolhido pelo assinante. */
+    agendarComCredito: (p) => {
+      const a = assinaturaPorToken(p.token);
+      exigirAtiva(a);
+      return paraCliente(reservarPeloPlano(a, String(p.data), String(p.hora)));
+    },
+
+    listarAssinaturas: (_p, authToken) => {
+      const usuario = autenticar(authToken);
+      carregar();
+      return assinaturasMem
+        .filter((a) => usuario.papel === 'ADMIN' || a.barbeiro_id === usuario.barbeiro_id)
+        .map(paraAssinaturaPainel);
+    },
+
+    /** Muda status, pagamento ou dia fixo de uma assinatura (admin). */
+    atualizarAssinatura: (p, authToken) => {
+      const usuario = autenticar(authToken);
+      if (usuario.papel !== 'ADMIN')
+        throw new ErroApi('PROIBIDO', 'Só o administrador altera planos.');
+      carregar();
+      const a = assinaturasMem.find((x) => x.id === p.id);
+      if (!a) throw new ErroApi('NAO_ENCONTRADO', 'Assinatura não encontrada.');
+      const mudancas: Partial<Assinatura> = {};
+      if (p.status) mudancas.status = p.status as Assinatura['status'];
+      if (p.pago_ate) mudancas.pago_ate = String(p.pago_ate);
+      if (p.fixo !== undefined) mudancas.fixo = p.fixo as Assinatura['fixo'];
+      alterarAssinatura(a.id, mudancas);
+      return paraAssinaturaPainel(assinaturasMem.find((x) => x.id === a.id)!);
+    },
+
+    criarAssinatura: (p, authToken) => {
+      const usuario = autenticar(authToken);
+      if (usuario.papel !== 'ADMIN')
+        throw new ErroApi('PROIBIDO', 'Só o administrador cria planos.');
+      const nome = String(p.clienteNome ?? '').trim();
+      const telefone = normalizarTelefone(String(p.clienteTelefone ?? ''));
+      if (nome.length < 2) throw new ErroApi('VALIDACAO', 'Informe o nome do cliente.');
+      if (!telefone) throw new ErroApi('VALIDACAO', 'Informe um WhatsApp válido, com DDD.');
+      if (!PLANOS.some((x) => x.id === p.planoId))
+        throw new ErroApi('VALIDACAO', 'Escolha um plano.');
+      if (!BARBEIROS.some((x) => x.id === p.barbeiroId))
+        throw new ErroApi('VALIDACAO', 'Escolha o barbeiro.');
+      const hoje = agoraSP().data;
+      const nova: Assinatura = {
+        id: `n${novoToken().slice(0, 8)}`,
+        token: novoToken(),
+        cliente_nome: nome,
+        cliente_telefone: telefone,
+        plano_id: String(p.planoId),
+        barbeiro_id: String(p.barbeiroId),
+        fixo: (p.fixo as Assinatura['fixo']) ?? null,
+        status: 'ATIVA',
+        inicio: hoje,
+        pago_ate: mesDe(hoje),
+      };
+      salvo.assinaturas = [...(salvo.assinaturas ?? []), nova];
+      salvar();
+      memoria = null;
+      carregar();
+      return paraAssinaturaPainel(assinaturasMem.find((x) => x.id === nova.id)!);
+    },
+
+    criarAgendamento: (p, authToken) => {
+      if (p.honeypot) throw new ErroApi('VALIDACAO', 'Não foi possível concluir.');
+      // Agendar exige conta: o cliente acha tudo depois em "Minha conta".
+      const quem = autenticarQualquer(authToken);
+      const nome = String(p.clienteNome ?? '').trim();
+      const telefone = normalizarTelefone(String(p.clienteTelefone ?? ''));
+      if (nome.length < 2 || nome.length > 60) throw new ErroApi('VALIDACAO', 'Informe seu nome.');
+      if (!telefone) throw new ErroApi('VALIDACAO', 'Informe um WhatsApp válido, com DDD.');
+
+      const servico = buscarServico(p.servicoId);
+      const data = String(p.data);
+      const hora = String(p.hora);
+      const slot = horariosDoDia(servico, String(p.barbeiroId), data).find((h) => h.hora === hora);
+      if (!slot) throw new ErroApi('SLOT_INDISPONIVEL', 'Esse horário acabou de ser ocupado.');
+
+      const registros = carregar();
+      const futuros = registros.filter(
+        (r) =>
+          r.cliente_telefone === telefone &&
+          (r.status === 'AGENDADO' || r.status === 'CONFIRMADO') &&
+          minutosAte(r) > 0,
       );
-    }
-    mudarStatus(r, 'CANCELADO');
-    return paraAssinaturaCliente(a);
-  },
+      if (futuros.length >= MAX_FUTUROS_POR_TELEFONE) {
+        throw new ErroApi(
+          'LIMITE_AGENDAMENTOS',
+          `Você já tem ${MAX_FUTUROS_POR_TELEFONE} horários marcados. Cancele um deles para agendar outro.`,
+        );
+      }
 
-  /** Usa um crédito livre do mês num horário escolhido pelo assinante. */
-  agendarComCredito: (p) => {
-    const a = assinaturaPorToken(p.token);
-    exigirAtiva(a);
-    return paraCliente(reservarPeloPlano(a, String(p.data), String(p.hora)));
-  },
+      // "Qualquer barbeiro": o que tiver menos atendimentos no dia.
+      const cargaNoDia = (id: string) =>
+        registros.filter((r) => r.barbeiro_id === id && r.data === data && r.status !== 'CANCELADO')
+          .length;
+      const barbeiroId = [...slot.barbeiroIds].sort((a, b) => cargaNoDia(a) - cargaNoDia(b))[0];
 
-  listarAssinaturas: (_p, authToken) => {
-    const usuario = autenticar(authToken);
-    carregar();
-    return assinaturasMem
-      .filter((a) => usuario.papel === 'ADMIN' || a.barbeiro_id === usuario.barbeiro_id)
-      .map(paraAssinaturaPainel);
-  },
+      const registro: Registro = {
+        id: novoToken().slice(0, 12),
+        codigo: novoCodigo(),
+        token: novoToken(),
+        barbeiro_id: barbeiroId,
+        servico_nome: servico.nome,
+        duracao_min: servico.duracao_min,
+        preco: servico.preco,
+        data,
+        hora_inicio: hora,
+        hora_fim: minParaHhmm(hhmmParaMin(hora) + servico.duracao_min),
+        cliente_nome: nome,
+        cliente_telefone: telefone,
+        observacao: String(p.observacao ?? '').slice(0, 200),
+        status: 'AGENDADO',
+        origem: quem.papel === 'CLIENTE' ? 'CLIENTE' : 'OPERADOR',
+        cliente_id: quem.papel === 'CLIENTE' ? quem.id : null,
+        pagamento:
+          p.formaPagamento === 'ONLINE'
+            ? {
+                forma: 'ONLINE',
+                status: 'PENDENTE',
+                metodo: p.metodoPagamento === 'CARTAO' ? 'CARTAO' : 'PIX',
+              }
+            : { forma: 'NA_BARBEARIA', status: 'A_RECEBER' },
+      };
+      registros.push(registro);
+      salvo.criados.push(registro);
+      salvar();
+      return paraCliente(registro);
+    },
 
-  /** Muda status, pagamento ou dia fixo de uma assinatura (admin). */
-  atualizarAssinatura: (p, authToken) => {
-    const usuario = autenticar(authToken);
-    if (usuario.papel !== 'ADMIN')
-      throw new ErroApi('PROIBIDO', 'Só o administrador altera planos.');
-    carregar();
-    const a = assinaturasMem.find((x) => x.id === p.id);
-    if (!a) throw new ErroApi('NAO_ENCONTRADO', 'Assinatura não encontrada.');
-    const mudancas: Partial<Assinatura> = {};
-    if (p.status) mudancas.status = p.status as Assinatura['status'];
-    if (p.pago_ate) mudancas.pago_ate = String(p.pago_ate);
-    if (p.fixo !== undefined) mudancas.fixo = p.fixo as Assinatura['fixo'];
-    alterarAssinatura(a.id, mudancas);
-    return paraAssinaturaPainel(assinaturasMem.find((x) => x.id === a.id)!);
-  },
+    getAgendamentoPorToken: (p) => {
+      const registro = carregar().find((r) => r.token === p.token);
+      if (!registro) throw new ErroApi('NAO_ENCONTRADO', 'Agendamento não encontrado.');
+      return paraCliente(registro);
+    },
 
-  criarAssinatura: (p, authToken) => {
-    const usuario = autenticar(authToken);
-    if (usuario.papel !== 'ADMIN') throw new ErroApi('PROIBIDO', 'Só o administrador cria planos.');
-    const nome = String(p.clienteNome ?? '').trim();
-    const telefone = normalizarTelefone(String(p.clienteTelefone ?? ''));
-    if (nome.length < 2) throw new ErroApi('VALIDACAO', 'Informe o nome do cliente.');
-    if (!telefone) throw new ErroApi('VALIDACAO', 'Informe um WhatsApp válido, com DDD.');
-    if (!PLANOS.some((x) => x.id === p.planoId))
-      throw new ErroApi('VALIDACAO', 'Escolha um plano.');
-    if (!BARBEIROS.some((x) => x.id === p.barbeiroId))
-      throw new ErroApi('VALIDACAO', 'Escolha o barbeiro.');
-    const hoje = agoraSP().data;
-    const nova: Assinatura = {
-      id: `n${novoToken().slice(0, 8)}`,
-      token: novoToken(),
-      cliente_nome: nome,
-      cliente_telefone: telefone,
-      plano_id: String(p.planoId),
-      barbeiro_id: String(p.barbeiroId),
-      fixo: (p.fixo as Assinatura['fixo']) ?? null,
-      status: 'ATIVA',
-      inicio: hoje,
-      pago_ate: mesDe(hoje),
-    };
-    salvo.assinaturas = [...(salvo.assinaturas ?? []), nova];
-    salvar();
-    memoria = null;
-    carregar();
-    return paraAssinaturaPainel(assinaturasMem.find((x) => x.id === nova.id)!);
-  },
+    cancelarPorToken: (p) => {
+      const registro = carregar().find((r) => r.token === p.token);
+      if (!registro) throw new ErroApi('NAO_ENCONTRADO', 'Agendamento não encontrado.');
+      if (!paraCliente(registro).pode_cancelar) {
+        throw new ErroApi(
+          'CANCELAMENTO_FORA_DO_PRAZO',
+          'Não dá mais para cancelar pelo site. Fale com a barbearia.',
+        );
+      }
+      mudarStatus(registro, 'CANCELADO');
+      return paraCliente(registro);
+    },
 
-  criarAgendamento: (p) => {
-    if (p.honeypot) throw new ErroApi('VALIDACAO', 'Não foi possível concluir.');
-    const nome = String(p.clienteNome ?? '').trim();
-    const telefone = normalizarTelefone(String(p.clienteTelefone ?? ''));
-    if (nome.length < 2 || nome.length > 60) throw new ErroApi('VALIDACAO', 'Informe seu nome.');
-    if (!telefone) throw new ErroApi('VALIDACAO', 'Informe um WhatsApp válido, com DDD.');
+    /** Um login só: equipe vai para o painel, cliente para a área dele. */
+    login: async (p) => {
+      const login = normalizarEmail(p.login);
+      const senha = String(p.senha ?? '');
+      const equipe = USUARIOS.find((u) => u.login === login || u.email === login);
+      if (equipe) {
+        if (!iguais(equipe.senha, senha))
+          throw new ErroApi('NAO_AUTORIZADO', 'E-mail ou senha incorretos.');
+        return { authToken: `demo.${equipe.id}`, usuario: autenticar(`demo.${equipe.id}`) };
+      }
+      const conta = contas().find((c) => c.email === login);
+      const ok =
+        conta &&
+        (conta.hash
+          ? iguais(conta.hash, await hashSenha(conta.salt!, senha))
+          : conta.id === CONTA_EXEMPLO.id && senha === 'demo');
+      if (!conta || !ok) throw new ErroApi('NAO_AUTORIZADO', 'E-mail ou senha incorretos.');
+      return { authToken: `cli.${conta.id}`, usuario: paraUsuarioCliente(conta) };
+    },
 
-    const servico = buscarServico(p.servicoId);
-    const data = String(p.data);
-    const hora = String(p.hora);
-    const slot = horariosDoDia(servico, String(p.barbeiroId), data).find((h) => h.hora === hora);
-    if (!slot) throw new ErroApi('SLOT_INDISPONIVEL', 'Esse horário acabou de ser ocupado.');
+    cadastrarCliente: async (p) => {
+      const nome = String(p.nome ?? '').trim();
+      const email = normalizarEmail(p.email);
+      const telefone = normalizarTelefone(String(p.telefone ?? ''));
+      const senha = String(p.senha ?? '');
+      if (nome.length < 2 || nome.length > 60) throw new ErroApi('VALIDACAO', 'Informe seu nome.');
+      if (!emailValido(email)) throw new ErroApi('VALIDACAO', 'Informe um e-mail válido.');
+      if (!telefone) throw new ErroApi('VALIDACAO', 'Informe um WhatsApp válido, com DDD.');
+      if (senha.length < 6)
+        throw new ErroApi('VALIDACAO', 'A senha precisa ter pelo menos 6 caracteres.');
+      if (USUARIOS.some((u) => u.email === email) || contas().some((c) => c.email === email)) {
+        throw new ErroApi('VALIDACAO', 'Esse e-mail já tem conta. Use "Entrar".');
+      }
+      const salt = novoToken().slice(0, 16);
+      const conta: Conta = {
+        id: `c${novoToken().slice(0, 10)}`,
+        nome,
+        email,
+        telefone,
+        salt,
+        hash: await hashSenha(salt, senha),
+        criado_em: new Date().toISOString(),
+      };
+      salvo.contas = [...(salvo.contas ?? []), conta];
+      salvar();
+      return { authToken: `cli.${conta.id}`, usuario: paraUsuarioCliente(conta) };
+    },
 
-    const registros = carregar();
-    const futuros = registros.filter(
-      (r) =>
-        r.cliente_telefone === telefone &&
-        (r.status === 'AGENDADO' || r.status === 'CONFIRMADO') &&
-        minutosAte(r) > 0,
-    );
-    if (futuros.length >= MAX_FUTUROS_POR_TELEFONE) {
-      throw new ErroApi(
-        'LIMITE_AGENDAMENTOS',
-        `Você já tem ${MAX_FUTUROS_POR_TELEFONE} horários marcados. Cancele um deles para agendar outro.`,
-      );
-    }
+    me: (_p, authToken) => autenticarQualquer(authToken),
 
-    // "Qualquer barbeiro": o que tiver menos atendimentos no dia.
-    const cargaNoDia = (id: string) =>
-      registros.filter((r) => r.barbeiro_id === id && r.data === data && r.status !== 'CANCELADO')
-        .length;
-    const barbeiroId = [...slot.barbeiroIds].sort((a, b) => cargaNoDia(a) - cargaNoDia(b))[0];
+    /** Área do cliente: os horários e planos dessa conta. */
+    minhaConta: (_p, authToken) => {
+      const usuario = autenticarCliente(authToken);
+      const agendamentos = carregar()
+        .filter((r) => r.cliente_id === usuario.id && !r.assinatura_id)
+        .sort((a, b) => (b.data + b.hora_inicio).localeCompare(a.data + a.hora_inicio))
+        .map(paraCliente);
+      const assinaturas = assinaturasMem
+        .filter((a) => a.cliente_id === usuario.id && a.status !== 'CANCELADA')
+        .map((a) => ({ token: a.token, plano_nome: planoDe(a).nome, status: a.status }));
+      return { usuario, agendamentos, assinaturas };
+    },
 
-    const registro: Registro = {
-      id: novoToken().slice(0, 12),
-      codigo: novoCodigo(),
-      token: novoToken(),
-      barbeiro_id: barbeiroId,
-      servico_nome: servico.nome,
-      duracao_min: servico.duracao_min,
-      preco: servico.preco,
-      data,
-      hora_inicio: hora,
-      hora_fim: minParaHhmm(hhmmParaMin(hora) + servico.duracao_min),
-      cliente_nome: nome,
-      cliente_telefone: telefone,
-      observacao: String(p.observacao ?? '').slice(0, 200),
-      status: 'AGENDADO',
-      origem: 'CLIENTE',
-      pagamento:
-        p.formaPagamento === 'ONLINE'
-          ? {
-              forma: 'ONLINE',
-              status: 'PENDENTE',
-              metodo: p.metodoPagamento === 'CARTAO' ? 'CARTAO' : 'PIX',
-            }
-          : { forma: 'NA_BARBEARIA', status: 'A_RECEBER' },
-    };
-    registros.push(registro);
-    salvo.criados.push(registro);
-    salvar();
-    return paraCliente(registro);
-  },
+    listarAgendamentos: (p, authToken) => {
+      const usuario = autenticar(authToken);
+      return carregar()
+        .filter((r) => r.data === p.data)
+        .filter((r) => usuario.papel === 'ADMIN' || r.barbeiro_id === usuario.barbeiro_id)
+        .sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio))
+        .map(paraPainel);
+    },
 
-  getAgendamentoPorToken: (p) => {
-    const registro = carregar().find((r) => r.token === p.token);
-    if (!registro) throw new ErroApi('NAO_ENCONTRADO', 'Agendamento não encontrado.');
-    return paraCliente(registro);
-  },
+    /** Agendamentos de um intervalo de datas (dashboard e relatórios). */
+    listarAgendamentosPeriodo: (p, authToken) => {
+      const usuario = autenticar(authToken);
+      const de = String(p.de);
+      const ate = String(p.ate);
+      const filtro =
+        usuario.papel === 'ADMIN' ? (p.barbeiroId as string | undefined) : usuario.barbeiro_id;
+      return carregar()
+        .filter((r) => r.data >= de && r.data <= ate)
+        .filter((r) => !filtro || r.barbeiro_id === filtro)
+        .sort((a, b) => (a.data + a.hora_inicio).localeCompare(b.data + b.hora_inicio))
+        .map(paraPainel);
+    },
 
-  cancelarPorToken: (p) => {
-    const registro = carregar().find((r) => r.token === p.token);
-    if (!registro) throw new ErroApi('NAO_ENCONTRADO', 'Agendamento não encontrado.');
-    if (!paraCliente(registro).pode_cancelar) {
-      throw new ErroApi(
-        'CANCELAMENTO_FORA_DO_PRAZO',
-        'Não dá mais para cancelar pelo site. Fale com a barbearia.',
-      );
-    }
-    mudarStatus(registro, 'CANCELADO');
-    return paraCliente(registro);
-  },
-
-  login: (p) => {
-    const usuario = USUARIOS.find((u) => u.login === String(p.login).trim().toLowerCase());
-    if (!usuario || usuario.senha !== p.senha) {
-      throw new ErroApi('NAO_AUTORIZADO', 'Login ou senha incorretos.');
-    }
-    return { authToken: `demo.${usuario.id}`, usuario: autenticar(`demo.${usuario.id}`) };
-  },
-
-  me: (_p, authToken) => autenticar(authToken),
-
-  listarAgendamentos: (p, authToken) => {
-    const usuario = autenticar(authToken);
-    return carregar()
-      .filter((r) => r.data === p.data)
-      .filter((r) => usuario.papel === 'ADMIN' || r.barbeiro_id === usuario.barbeiro_id)
-      .sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio))
-      .map(paraPainel);
-  },
-
-  /** Agendamentos de um intervalo de datas (dashboard e relatórios). */
-  listarAgendamentosPeriodo: (p, authToken) => {
-    const usuario = autenticar(authToken);
-    const de = String(p.de);
-    const ate = String(p.ate);
-    const filtro =
-      usuario.papel === 'ADMIN' ? (p.barbeiroId as string | undefined) : usuario.barbeiro_id;
-    return carregar()
-      .filter((r) => r.data >= de && r.data <= ate)
-      .filter((r) => !filtro || r.barbeiro_id === filtro)
-      .sort((a, b) => (a.data + a.hora_inicio).localeCompare(b.data + b.hora_inicio))
-      .map(paraPainel);
-  },
-
-  atualizarStatus: (p, authToken) => {
-    const usuario = autenticar(authToken);
-    const registro = carregar().find((r) => r.id === p.id);
-    if (!registro) throw new ErroApi('NAO_ENCONTRADO', 'Agendamento não encontrado.');
-    if (usuario.papel !== 'ADMIN' && registro.barbeiro_id !== usuario.barbeiro_id) {
-      throw new ErroApi('PROIBIDO', 'Esse agendamento é de outro barbeiro.');
-    }
-    mudarStatus(registro, p.status as StatusAgendamento);
-    return paraPainel(registro);
-  },
-};
+    atualizarStatus: (p, authToken) => {
+      const usuario = autenticar(authToken);
+      const registro = carregar().find((r) => r.id === p.id);
+      if (!registro) throw new ErroApi('NAO_ENCONTRADO', 'Agendamento não encontrado.');
+      if (usuario.papel !== 'ADMIN' && registro.barbeiro_id !== usuario.barbeiro_id) {
+        throw new ErroApi('PROIBIDO', 'Esse agendamento é de outro barbeiro.');
+      }
+      mudarStatus(registro, p.status as StatusAgendamento);
+      return paraPainel(registro);
+    },
+  };
 
 export async function chamarMock<T>(
   action: string,
@@ -1029,5 +1219,5 @@ export async function chamarMock<T>(
   await new Promise((r) => setTimeout(r, 350 + Math.random() * 350));
   const acao = acoes[action];
   if (!acao) throw new ErroApi('VALIDACAO', `Ação desconhecida: ${action}`);
-  return structuredClone(acao(payload, authToken)) as T;
+  return structuredClone(await acao(payload, authToken)) as T;
 }

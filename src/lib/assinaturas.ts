@@ -87,12 +87,27 @@ export function gerarHorariosDoPlano(opcoes: {
    * Assinaturas reais sem dia fixo não ganham horários inventados: o cliente marca.
    */
   simularUso?: string[];
+  /** Horários já marcados por clientes de verdade: o dia fixo nunca cai em cima deles. */
+  ocupadosExternos?: { barbeiro_id: string; data: string; hora_inicio: string; hora_fim: string }[];
 }): RegistroSemente[] {
-  const { assinaturas, planos, servicos, expediente, hoje, agoraMin, simularUso = [] } = opcoes;
+  const {
+    planos,
+    servicos,
+    expediente,
+    hoje,
+    agoraMin,
+    simularUso = [],
+    ocupadosExternos = [],
+  } = opcoes;
+  // Assinaturas reais primeiro: num conflito de dia fixo, o exemplo da demonstração cede.
+  const assinaturas = [
+    ...opcoes.assinaturas.filter((a) => !simularUso.includes(a.id)),
+    ...opcoes.assinaturas.filter((a) => simularUso.includes(a.id)),
+  ];
   const fim = somarDias(hoje, RESERVA_FIXOS_DIAS);
   const registros: RegistroSemente[] = [];
   const ocupado = (barbeiro: string, data: string, ini: number, f: number) =>
-    registros.some(
+    [...registros, ...ocupadosExternos].some(
       (r) =>
         r.barbeiro_id === barbeiro &&
         r.data === data &&
@@ -234,4 +249,58 @@ export function textoFixo(fixo: { dia_semana: number; hora: string } | null): st
   const dia = DIAS_SEMANA_LONGOS[fixo.dia_semana];
   const fimDeSemana = fixo.dia_semana === 0 || fixo.dia_semana === 6;
   return `${fimDeSemana ? 'Todo' : 'Toda'} ${dia}${fimDeSemana ? '' : '-feira'} às ${fixo.hora}`;
+}
+
+/**
+ * Horários (HH:mm) que ainda podem virar dia fixo para um barbeiro num dia da semana:
+ * dentro do expediente, fora da pausa e sem bater no dia fixo de outro assinante ativo.
+ */
+export function horasFixasLivres(opcoes: {
+  assinaturas: Assinatura[];
+  planos: Plano[];
+  servicos: { id: string; duracao_min: number }[];
+  expediente: Record<number, Jornada | undefined>;
+  planoId: string;
+  barbeiroId: string;
+  diaSemana: number;
+  intervaloMin: number;
+  /** Ao editar uma assinatura, ela não conta como ocupando o próprio horário. */
+  ignorarAssinaturaId?: string;
+}): string[] {
+  const {
+    assinaturas,
+    planos,
+    servicos,
+    expediente,
+    planoId,
+    barbeiroId,
+    diaSemana,
+    intervaloMin,
+  } = opcoes;
+  const dia = expediente[diaSemana];
+  const duracaoDe = (pid: string) =>
+    servicos.find((s) => s.id === planos.find((p) => p.id === pid)?.servico_id)?.duracao_min ?? 30;
+  const duracao = duracaoDe(planoId);
+  if (!dia) return [];
+  const tomados = assinaturas
+    .filter(
+      (a) =>
+        a.id !== opcoes.ignorarAssinaturaId &&
+        a.barbeiro_id === barbeiroId &&
+        a.fixo?.dia_semana === diaSemana &&
+        a.status !== 'CANCELADA' &&
+        a.status !== 'PAUSADA',
+    )
+    .map((a) => {
+      const ini = hhmmParaMin(a.fixo!.hora);
+      return { inicio: ini, fim: ini + duracaoDe(a.plano_id) };
+    });
+  const livres: string[] = [];
+  for (let t = dia.jornada.inicio; t + duracao <= dia.jornada.fim; t += intervaloMin) {
+    const faixa = { inicio: t, fim: t + duracao };
+    if (sobrepoe(faixa, dia.pausa)) continue;
+    if (tomados.some((x) => sobrepoe(faixa, x))) continue;
+    livres.push(minParaHhmm(t));
+  }
+  return livres;
 }

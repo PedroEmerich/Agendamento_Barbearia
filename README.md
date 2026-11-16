@@ -27,16 +27,31 @@ Para publicar a demonstração há duas opções, sem variáveis de ambiente:
 | `/agendar` | Agendamento em 5 passos + confirmação (código, `.ics`, link) |
 | `/meu-agendamento/:token` | Consulta e cancelamento pelo cliente |
 | `/privacidade` | Aviso de privacidade |
-| `/admin/login` → `/admin` | Painel demonstrativo (detalhes abaixo) |
+| `/entrar` | Login único (cliente → Minha conta; barbeiro/dono → painel) e criação de conta |
+| `/minha-conta` | Área do cliente: plano, próximos horários, histórico e dados |
+
+### Contas e login
+
+Um botão **Entrar** no topo serve para todos (e-mail e senha, com "Manter conectado"):
+equipe vai para o **painel**; cliente vai para **Minha conta** (`/minha-conta`), com o plano (se
+for assinante), os próximos horários, o histórico e os dados. Para agendar ou assinar, o cliente cria
+a conta no próprio último passo (nome, WhatsApp, e-mail e senha) ou entra, se já tiver. O painel
+recusa login de cliente.
+
+Contas de demonstração (senha `demo`):
+
+| E-mail | Vai para |
+|---|---|
+| `marcos@cliente.demo` | Minha conta (assinante do Plano Corte, quintas 18:00 com o Davi) |
+| `davi@`, `renato@`, `renan@underground.demo` | Painel do barbeiro (só a agenda e os números dele) |
+| `admin@underground.demo` (ou só `admin`) | Painel do dono: os três barbeiros, com filtro |
+
+Na demonstração, a sessão fica no navegador (`localStorage` com "Manter conectado", senão
+`sessionStorage`) e a senha do cliente é guardada só como hash SHA-256 com sal. No back-end real, o
+Apps Script segue a seção 5.6 da especificação (hash com sal, token assinado, bloqueio após
+tentativas erradas) com o papel `CLIENTE` na aba `Usuarios`.
 
 ### Painel (demonstração)
-
-Entre em `/admin/login` (ou "Área do barbeiro" no rodapé):
-
-| Login | Senha | Visão |
-|---|---|---|
-| `admin` | `demo` | Dono: os três barbeiros, com filtro por barbeiro |
-| `davi`, `renato`, `renan` | `demo` | O próprio barbeiro: só a agenda e os números dele |
 
 - **Início:** indicadores (semana, faturamento do mês, comparecimento, ticket médio), gráfico de
   agendamentos ou faturamento **por semana ou por mês** com a tendência, próximos clientes e serviços

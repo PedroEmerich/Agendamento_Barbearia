@@ -1,5 +1,14 @@
 import { useEffect, useState } from 'react';
-import { BrowserRouter, Link, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom';
+import {
+  BrowserRouter,
+  Link,
+  Navigate,
+  NavLink,
+  Outlet,
+  Route,
+  Routes,
+  useLocation,
+} from 'react-router-dom';
 import { Cursor, LuzAmbiente, useScrollY } from '../components/efeitos';
 import { MODO_DEMO } from '../lib/api';
 import Home from '../pages/publico/Home';
@@ -8,7 +17,9 @@ import MeuAgendamento from '../pages/publico/MeuAgendamento';
 import Privacidade from '../pages/publico/Privacidade';
 import MinhaAssinatura from '../pages/publico/MinhaAssinatura';
 import Assinar from '../pages/publico/Assinar';
-import Login from '../pages/admin/Login';
+import Entrar from '../pages/Entrar';
+import MinhaConta from '../pages/publico/MinhaConta';
+import { useConta } from '../lib/conta';
 import Agenda from '../pages/admin/Agenda';
 import Inicio from '../pages/admin/Inicio';
 import LayoutPainel from '../pages/admin/painel';
@@ -95,6 +106,38 @@ function useLogoDaPaginaVisivel() {
   return visivel;
 }
 
+/** "Entrar" para quem não está logado; para quem está, atalho para a conta ou o painel. */
+function BotaoConta({ compacto }: { compacto: boolean }) {
+  const { usuario, carregando } = useConta();
+  const { pathname } = useLocation();
+  if (carregando) return <span className="skeleton h-10 w-10 rounded-full" />;
+  if (!usuario) {
+    return (
+      <Link
+        to={`/entrar?voltar=${encodeURIComponent(pathname === '/' ? '/minha-conta' : pathname)}`}
+        className={`btn-ghost ${compacto ? 'min-h-10 px-4' : 'px-5'}`}
+      >
+        Entrar
+      </Link>
+    );
+  }
+  const destino = usuario.papel === 'CLIENTE' ? '/minha-conta' : '/admin';
+  return (
+    <Link
+      to={destino}
+      aria-label={usuario.papel === 'CLIENTE' ? 'Minha conta' : 'Painel'}
+      className="flex min-h-10 items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] py-1 pr-3 pl-1 text-sm font-semibold text-zinc-100 transition hover:border-gold-400/60"
+    >
+      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gold-400/20 font-display text-gold-200">
+        {usuario.nome[0]}
+      </span>
+      <span className="hidden sm:inline">
+        {usuario.papel === 'CLIENTE' ? usuario.nome.split(' ')[0] : 'Painel'}
+      </span>
+    </Link>
+  );
+}
+
 function Cabecalho() {
   const rolou = useScrollY() > 40;
   const naHome = useLocation().pathname === '/';
@@ -143,12 +186,12 @@ function Cabecalho() {
             </NavLink>
           ))}
         </nav>
-        <Link
-          to="/agendar"
-          className={`btn-gold col-start-3 justify-self-end ${rolou ? 'min-h-10 px-5' : 'px-6'}`}
-        >
-          Agendar
-        </Link>
+        <span className="col-start-3 flex items-center gap-2 justify-self-end">
+          <BotaoConta compacto={rolou} />
+          <Link to="/agendar" className={`btn-gold ${rolou ? 'min-h-10 px-5' : 'px-6'}`}>
+            Agendar
+          </Link>
+        </span>
       </header>
     </div>
   );
@@ -189,6 +232,7 @@ export default function App() {
           <Route path="/privacidade" element={<Privacidade />} />
           <Route path="/assinatura/:token" element={<MinhaAssinatura />} />
           <Route path="/assinar/:planoId?" element={<Assinar />} />
+          <Route path="/minha-conta" element={<MinhaConta />} />
           <Route
             path="*"
             element={
@@ -202,7 +246,8 @@ export default function App() {
             }
           />
         </Route>
-        <Route path="/admin/login" element={<Login />} />
+        <Route path="/entrar" element={<Entrar />} />
+        <Route path="/admin/login" element={<Navigate to="/entrar" replace />} />
         <Route path="/admin" element={<LayoutPainel />}>
           <Route index element={<Inicio />} />
           <Route path="agenda" element={<Agenda />} />

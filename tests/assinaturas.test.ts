@@ -3,6 +3,7 @@ import {
   cicloDoMes,
   encaixarNaAgenda,
   gerarHorariosDoPlano,
+  horasFixasLivres,
   textoFixo,
   usoNoMes,
 } from '../src/lib/assinaturas';
@@ -165,5 +166,72 @@ describe('agenda e textos', () => {
     expect(textoFixo({ dia_semana: 4, hora: '18:00' })).toBe('Toda quinta-feira às 18:00');
     expect(textoFixo({ dia_semana: 6, hora: '10:00' })).toBe('Todo sábado às 10:00');
     expect(textoFixo(null)).toBe('Sem dia fixo');
+  });
+});
+
+describe('dia fixo livre', () => {
+  const base = {
+    planos,
+    servicos,
+    expediente,
+    planoId: 'p1',
+    barbeiroId: 'b1',
+    diaSemana: 4,
+    intervaloMin: 30,
+  };
+
+  it('tira a pausa e o horário que já é de outro assinante', () => {
+    const livres = horasFixasLivres({ ...base, assinaturas: [assinatura()] });
+    expect(livres).not.toContain('18:00'); // dia fixo do Marcos
+    expect(livres).toContain('18:30');
+    expect(livres).not.toContain('12:30'); // pausa
+    expect(livres[0]).toBe('09:30');
+  });
+
+  it('assinatura pausada libera o horário; outro barbeiro não interfere', () => {
+    expect(
+      horasFixasLivres({ ...base, assinaturas: [assinatura({ status: 'PAUSADA' })] }),
+    ).toContain('18:00');
+    expect(horasFixasLivres({ ...base, barbeiroId: 'b2', assinaturas: [assinatura()] })).toContain(
+      '18:00',
+    );
+  });
+
+  it('dia sem expediente não tem horário', () => {
+    expect(horasFixasLivres({ ...base, diaSemana: 1, assinaturas: [] })).toEqual([]);
+  });
+
+  it('assinatura real tem prioridade sobre o exemplo da demonstração no mesmo horário', () => {
+    const regs = gerarHorariosDoPlano({
+      assinaturas: [
+        assinatura({ id: 'exemplo' }),
+        assinatura({ id: 'real', inicio: '2026-11-16' }),
+      ],
+      planos,
+      servicos,
+      expediente,
+      hoje: '2026-11-16',
+      agoraMin: 600,
+      simularUso: ['exemplo'],
+    });
+    const futuros = regs.filter((r) => r.data > '2026-11-16');
+    expect(futuros.length).toBeGreaterThan(0);
+    expect(futuros.every((r) => r.assinatura_id === 'real')).toBe(true);
+  });
+
+  it('não reserva dia fixo em cima de horário já marcado por cliente', () => {
+    const regs = gerarHorariosDoPlano({
+      assinaturas: [assinatura({ inicio: '2026-11-16' })],
+      planos,
+      servicos,
+      expediente,
+      hoje: '2026-11-16',
+      agoraMin: 600,
+      ocupadosExternos: [
+        { barbeiro_id: 'b1', data: '2026-11-19', hora_inicio: '17:30', hora_fim: '18:30' },
+      ],
+    });
+    expect(regs.some((r) => r.data === '2026-11-19')).toBe(false);
+    expect(regs.some((r) => r.data === '2026-11-26')).toBe(true);
   });
 });
