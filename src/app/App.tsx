@@ -8,6 +8,9 @@ import MeuAgendamento from '../pages/publico/MeuAgendamento';
 import Privacidade from '../pages/publico/Privacidade';
 import Login from '../pages/admin/Login';
 import Agenda from '../pages/admin/Agenda';
+import Inicio from '../pages/admin/Inicio';
+import LayoutPainel from '../pages/admin/painel';
+import Relatorios from '../pages/admin/Relatorios';
 
 function RolarParaOTopo() {
   const { pathname, hash } = useLocation();
@@ -194,7 +197,11 @@ export default function App() {
           />
         </Route>
         <Route path="/admin/login" element={<Login />} />
-        <Route path="/admin" element={<Agenda />} />
+        <Route path="/admin" element={<LayoutPainel />}>
+          <Route index element={<Inicio />} />
+          <Route path="agenda" element={<Agenda />} />
+          <Route path="relatorios" element={<Relatorios />} />
+        </Route>
       </Routes>
     </BrowserRouter>
   );

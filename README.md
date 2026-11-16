@@ -27,7 +27,27 @@ Para publicar a demonstração há duas opções, sem variáveis de ambiente:
 | `/agendar` | Agendamento em 5 passos + confirmação (código, `.ics`, link) |
 | `/meu-agendamento/:token` | Consulta e cancelamento pelo cliente |
 | `/privacidade` | Aviso de privacidade |
-| `/admin/login` → `/admin` | Painel demo: agenda do dia por barbeiro (`admin`/`demo` ou `renato`/`demo`) |
+| `/admin/login` → `/admin` | Painel demonstrativo (detalhes abaixo) |
+
+### Painel (demonstração)
+
+Entre em `/admin/login` (ou "Área do barbeiro" no rodapé):
+
+| Login | Senha | Visão |
+|---|---|---|
+| `admin` | `demo` | Dono: os três barbeiros, com filtro por barbeiro |
+| `davi`, `renato`, `renan` | `demo` | O próprio barbeiro: só a agenda e os números dele |
+
+- **Início:** indicadores (semana, faturamento do mês, comparecimento, ticket médio), gráfico de
+  agendamentos ou faturamento **por semana ou por mês** com a tendência, próximos clientes e serviços
+  mais pedidos.
+- **Agenda:** dia a dia, sem permitir datas passadas, com a quantidade de horários dos próximos 14 dias.
+- **Relatórios:** período (semana, mês, mês passado, 3 meses ou datas livres), indicadores, por
+  serviço, por dia da semana, por barbeiro e lista completa, com exportação para **PDF** e **Excel**.
+
+A agenda simulada é gerada em `src/lib/semente.ts`: ~6 meses de histórico com crescimento leve,
+esta semana bem cheia e as próximas mais vazias. É determinística, então recarregar não muda nada;
+mudanças de status e agendamentos feitos pelo site ficam salvos no navegador.
 
 ## Dados de exemplo a revisar
 
