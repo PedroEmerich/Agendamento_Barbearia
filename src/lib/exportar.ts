@@ -3,6 +3,7 @@
 
 import type { AgendamentoPainel } from '../types';
 import { formatarPreco } from './datas';
+import { rotuloPagamento } from '../components/Pagamento';
 import { DIAS_SEMANA, ROTULO_STATUS, type Linha, type Resumo } from './relatorios';
 
 export interface DadosRelatorio {
@@ -306,6 +307,7 @@ export async function exportarExcel(d: DadosRelatorio): Promise<void> {
     { header: 'Status', key: 'status', width: 16 },
     { header: 'Origem', key: 'origem', width: 11 },
     { header: 'Tipo', key: 'tipo', width: 9 },
+    { header: 'Pagamento', key: 'pagamento', width: 24 },
     { header: 'Valor', key: 'valor', width: 12 },
   ];
   ags.columns = colunas;
@@ -324,6 +326,7 @@ export async function exportarExcel(d: DadosRelatorio): Promise<void> {
       status: ROTULO_STATUS[a.status],
       origem: a.origem === 'CLIENTE' ? 'Site' : 'Balcão',
       tipo: a.assinatura_id ? 'Plano' : 'Avulso',
+      pagamento: rotuloPagamento(a.pagamento),
       valor: a.preco,
     });
   }

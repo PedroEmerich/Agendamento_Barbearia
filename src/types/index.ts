@@ -22,7 +22,13 @@ export interface ConfigPublica {
   antecedencia_min_cancelamento_min: number;
   funcionamento: DiaFuncionamento[];
   /** Horário de abertura por dia da semana (0 = domingo); dia ausente = fechado. */
-  horario_semana: { dia_semana: number; abre: string; fecha: string }[];
+  horario_semana: {
+    dia_semana: number;
+    abre: string;
+    fecha: string;
+    pausa_inicio?: string;
+    pausa_fim?: string;
+  }[];
 }
 
 export interface Servico {
@@ -63,6 +69,8 @@ export interface AgendamentoCliente {
   pode_cancelar: boolean;
   /** Link pessoal da assinatura, quando o horário é de um plano. */
   assinatura_token?: string;
+  /** Ausente nos horários de plano (já cobertos pela mensalidade). */
+  pagamento?: Pagamento;
 }
 
 /** Visão do agendamento no painel. */
@@ -83,6 +91,7 @@ export interface AgendamentoPainel {
   origem: 'CLIENTE' | 'OPERADOR';
   /** Preenchido quando o horário usa um crédito de plano. */
   assinatura_id?: string | null;
+  pagamento?: Pagamento;
 }
 
 export interface Usuario {
@@ -117,7 +126,8 @@ export interface Plano {
   preco_avulso_mes: number;
 }
 
-export type StatusAssinatura = 'ATIVA' | 'PAUSADA' | 'ATRASADA' | 'CANCELADA';
+export type StatusAssinatura =
+  'AGUARDANDO_PAGAMENTO' | 'ATIVA' | 'PAUSADA' | 'ATRASADA' | 'CANCELADA';
 
 /** Dia e hora fixos da semana; opcional. */
 export interface HorarioFixo {
@@ -137,6 +147,9 @@ export interface Assinatura {
   inicio: string;
   /** Último mês pago, 'yyyy-MM'. */
   pago_ate: string;
+  pagamento_forma?: FormaPagamento;
+  /** Cobrança do mês aguardando pagamento online. */
+  cobranca_pendente?: string | null;
 }
 
 /** Assinatura com o uso de créditos do mês (painel). */
@@ -158,6 +171,8 @@ export interface AssinaturaCliente {
   barbeiro_foto?: string;
   fixo: HorarioFixo | null;
   status: StatusAssinatura;
+  pagamento_forma: FormaPagamento;
+  cobranca_pendente: string | null;
   ciclo: { de: string; ate: string };
   creditos: { total: number; usados: number; agendados: number; livres: number };
   /** Horários futuros do plano (deste ciclo e dos próximos). */
@@ -165,4 +180,39 @@ export interface AssinaturaCliente {
   /** Até quando o assinante pode agendar (janela maior que a do público). */
   agenda_ate: string;
   antecedencia_troca_min: number;
+}
+
+/* --------------------------------------------------------------- pagamento */
+
+/** Na barbearia (no balcão) ou online pelo gateway (Asaas). */
+export type FormaPagamento = 'NA_BARBEARIA' | 'ONLINE';
+export type MetodoPagamento = 'PIX' | 'CARTAO';
+/**
+ * A_RECEBER: vai pagar no balcão · PENDENTE: cobrança online aguardando ·
+ * PAGO · ESTORNADO: pago online e depois cancelado.
+ */
+export type StatusPagamento = 'A_RECEBER' | 'PENDENTE' | 'PAGO' | 'ESTORNADO';
+
+export interface Pagamento {
+  forma: FormaPagamento;
+  status: StatusPagamento;
+  metodo?: MetodoPagamento;
+  cobranca_id?: string;
+}
+
+/** Cobrança no gateway, no formato que o front usa (independente do Asaas). */
+export interface Cobranca {
+  id: string;
+  status: 'PENDENTE' | 'PAGO' | 'VENCIDO' | 'ESTORNADO';
+  valor: number;
+  metodo: MetodoPagamento;
+  descricao: string;
+  vencimento: string;
+  /** Página de pagamento do Asaas (cartão, ou Pix por lá). */
+  fatura_url?: string;
+  pix?: { imagem_base64?: string; copia_e_cola: string; expira_em?: string };
+  /** Cobrança de demonstração (nenhum dinheiro envolvido). */
+  simulada?: boolean;
+  /** Assinatura: cobrança recorrente mensal. */
+  recorrente?: boolean;
 }

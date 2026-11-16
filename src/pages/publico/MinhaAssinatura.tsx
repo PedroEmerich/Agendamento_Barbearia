@@ -23,7 +23,14 @@ import {
   somarDias,
 } from '../../lib/datas';
 import { useConsulta } from '../../lib/useConsulta';
-import type { AssinaturaCliente } from '../../types';
+import type { AssinaturaCliente, Cobranca } from '../../types';
+import {
+  ESCOLHA_INICIAL,
+  EscolhaPagamento,
+  escolhaValida,
+  PainelPagamento,
+  type EscolhaPagamentoValor,
+} from '../../components/Pagamento';
 import { CarrosselDias, GradeHorarios } from './Agendar';
 
 type Proximo = AssinaturaCliente['proximos'][number];
@@ -289,6 +296,82 @@ function EscolherHorario({
   );
 }
 
+/* ------------------------------------------------------- mensalidade em aberto */
+
+function PagarPlano({
+  token,
+  dados,
+  onPago,
+}: {
+  token: string;
+  dados: AssinaturaCliente;
+  onPago: () => void;
+}) {
+  const pendente = dados.cobranca_pendente;
+  const existente = useConsulta(pendente ? () => api.consultarPagamento(pendente) : null, [
+    pendente,
+  ]);
+  const [aberto, setAberto] = useState(dados.pagamento_forma === 'ONLINE');
+  const [escolha, setEscolha] = useState<EscolhaPagamentoValor>({
+    ...ESCOLHA_INICIAL,
+    forma: 'ONLINE',
+  });
+  const [cobranca, setCobranca] = useState<Cobranca | null>(null);
+  const [gerando, setGerando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  const atual = cobranca ?? existente.dados;
+  if (atual) return <PainelPagamento cobranca={atual} onPago={onPago} />;
+  if (existente.carregando) return <div className="skeleton h-40" />;
+  if (!aberto) {
+    return (
+      <button className="btn-ghost w-full" onClick={() => setAberto(true)}>
+        Prefere pagar agora? Pix ou cartão
+      </button>
+    );
+  }
+
+  async function gerar() {
+    setGerando(true);
+    setErro(null);
+    try {
+      setCobranca(
+        await api.iniciarPagamento('assinatura', token, {
+          metodo: escolha.metodo,
+          cpf: escolha.cpf,
+          email: escolha.email || undefined,
+        }),
+      );
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Não foi possível gerar o pagamento.');
+    } finally {
+      setGerando(false);
+    }
+  }
+
+  return (
+    <div className="card space-y-4 p-5">
+      <EscolhaPagamento
+        valor={escolha}
+        onMudar={(v) => setEscolha({ ...v, forma: 'ONLINE' })}
+        recorrente
+      />
+      {erro && (
+        <p role="alert" className="text-sm text-amber-200">
+          {erro}
+        </p>
+      )}
+      <button
+        className="btn-gold w-full"
+        disabled={!escolhaValida(escolha) || gerando}
+        onClick={gerar}
+      >
+        {gerando ? 'Gerando…' : `Pagar ${formatarPreco(dados.plano.preco_mensal)}`}
+      </button>
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ página */
 
 export default function MinhaAssinatura() {
@@ -367,10 +450,23 @@ export default function MinhaAssinatura() {
           {erro}
         </p>
       )}
+      {a.status === 'AGUARDANDO_PAGAMENTO' && (
+        <p className="mt-5 rounded-2xl border border-gold-400/30 bg-gold-400/10 px-4 py-3 text-sm text-gold-100">
+          {a.pagamento_forma === 'ONLINE'
+            ? 'Seu plano é ativado assim que o pagamento da primeira mensalidade for confirmado.'
+            : 'Pague a primeira mensalidade na barbearia para ativar o plano. Seus horários fixos já estão reservados.'}
+        </p>
+      )}
       {a.status === 'ATRASADA' && (
         <p className="mt-5 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
-          A mensalidade deste mês está em aberto. Fale com a barbearia para manter sua prioridade.
+          A mensalidade deste mês está em aberto. Pague abaixo ou na barbearia para manter sua
+          prioridade.
         </p>
+      )}
+      {(a.status === 'AGUARDANDO_PAGAMENTO' || a.status === 'ATRASADA') && (
+        <div className="mt-4">
+          <PagarPlano token={token} dados={a} onPago={() => consulta.recarregar()} />
+        </div>
       )}
       {a.status === 'PAUSADA' && (
         <p className="mt-5 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-zinc-300">
