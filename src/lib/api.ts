@@ -3,6 +3,11 @@
 
 import type {
   AgendamentoCliente,
+  AssinaturaCliente,
+  AssinaturaPainel,
+  HorarioFixo,
+  Plano,
+  StatusAssinatura,
   AgendamentoPainel,
   Barbeiro,
   ConfigPublica,
@@ -76,10 +81,36 @@ export const api = {
   getConfigPublica: () => chamar<ConfigPublica>('getConfigPublica'),
   listarServicos: () => chamar<Servico[]>('listarServicos'),
   listarBarbeiros: (servicoId?: string) => chamar<Barbeiro[]>('listarBarbeiros', { servicoId }),
-  getDiasDisponiveis: (servicoId: string, barbeiroId: string, de: string, ate: string) =>
-    chamar<string[]>('getDiasDisponiveis', { servicoId, barbeiroId, de, ate }),
-  getHorarios: (servicoId: string, barbeiroId: string, data: string) =>
-    chamar<Horario[]>('getHorarios', { servicoId, barbeiroId, data }),
+  getDiasDisponiveis: (
+    servicoId: string,
+    barbeiroId: string,
+    de: string,
+    ate: string,
+    assinaturaToken?: string,
+  ) => chamar<string[]>('getDiasDisponiveis', { servicoId, barbeiroId, de, ate, assinaturaToken }),
+  getHorarios: (servicoId: string, barbeiroId: string, data: string, assinaturaToken?: string) =>
+    chamar<Horario[]>('getHorarios', { servicoId, barbeiroId, data, assinaturaToken }),
+  listarPlanos: () => chamar<Plano[]>('listarPlanos'),
+  getAssinaturaPorToken: (token: string) =>
+    chamar<AssinaturaCliente>('getAssinaturaPorToken', { token }),
+  trocarHorarioAssinatura: (token: string, agendamentoId: string, data: string, hora: string) =>
+    chamar<AgendamentoCliente>('trocarHorarioAssinatura', { token, agendamentoId, data, hora }),
+  cancelarHorarioAssinatura: (token: string, agendamentoId: string) =>
+    chamar<AssinaturaCliente>('cancelarHorarioAssinatura', { token, agendamentoId }),
+  agendarComCredito: (token: string, data: string, hora: string) =>
+    chamar<AgendamentoCliente>('agendarComCredito', { token, data, hora }),
+  listarAssinaturas: () => chamar<AssinaturaPainel[]>('listarAssinaturas'),
+  atualizarAssinatura: (
+    id: string,
+    mudancas: { status?: StatusAssinatura; pago_ate?: string; fixo?: HorarioFixo | null },
+  ) => chamar<AssinaturaPainel>('atualizarAssinatura', { id, ...mudancas }),
+  criarAssinatura: (dados: {
+    clienteNome: string;
+    clienteTelefone: string;
+    planoId: string;
+    barbeiroId: string;
+    fixo: HorarioFixo | null;
+  }) => chamar<AssinaturaPainel>('criarAssinatura', dados),
   criarAgendamento: (dados: NovoAgendamento) =>
     chamar<AgendamentoCliente>('criarAgendamento', { ...dados }),
   getAgendamentoPorToken: (token: string) =>

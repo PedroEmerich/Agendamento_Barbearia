@@ -6,11 +6,13 @@ import Home from '../pages/publico/Home';
 import Agendar from '../pages/publico/Agendar';
 import MeuAgendamento from '../pages/publico/MeuAgendamento';
 import Privacidade from '../pages/publico/Privacidade';
+import MinhaAssinatura from '../pages/publico/MinhaAssinatura';
 import Login from '../pages/admin/Login';
 import Agenda from '../pages/admin/Agenda';
 import Inicio from '../pages/admin/Inicio';
 import LayoutPainel from '../pages/admin/painel';
 import Relatorios from '../pages/admin/Relatorios';
+import Assinantes from '../pages/admin/Assinantes';
 
 function RolarParaOTopo() {
   const { pathname, hash } = useLocation();
@@ -38,6 +40,7 @@ const SECOES = [
   ['servicos', 'Serviços'],
   ['equipe', 'Equipe'],
   ['espaco', 'O espaço'],
+  ['planos', 'Planos'],
   ['local', 'Onde estamos'],
 ] as const;
 
@@ -183,6 +186,7 @@ export default function App() {
           <Route path="/agendar" element={<Agendar />} />
           <Route path="/meu-agendamento/:token" element={<MeuAgendamento />} />
           <Route path="/privacidade" element={<Privacidade />} />
+          <Route path="/assinatura/:token" element={<MinhaAssinatura />} />
           <Route
             path="*"
             element={
@@ -200,6 +204,7 @@ export default function App() {
         <Route path="/admin" element={<LayoutPainel />}>
           <Route index element={<Inicio />} />
           <Route path="agenda" element={<Agenda />} />
+          <Route path="assinantes" element={<Assinantes />} />
           <Route path="relatorios" element={<Relatorios />} />
         </Route>
       </Routes>
