@@ -4,6 +4,7 @@
 import { useEffect, useState, type ReactNode, type SVGProps } from 'react';
 import { Navigate, NavLink, Outlet, useNavigate, useOutletContext } from 'react-router-dom';
 import { FotoBarbeiro, IconeCheck, IconeWhatsapp, SeloStatus } from '../../components/ui';
+import { SeloPagamento } from '../../components/Pagamento';
 import { api, MODO_DEMO, sessao } from '../../lib/api';
 import { agoraSP, diaSemana, formatarPreco, somarDias } from '../../lib/datas';
 import { formatarTelefone } from '../../lib/telefone';
@@ -151,7 +152,7 @@ export function CartaoAgendamento({
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1.5">
           <SeloStatus status={a.status} />
-          {a.assinatura_id && <SeloPlano />}
+          {a.assinatura_id ? <SeloPlano /> : <SeloPagamento pagamento={a.pagamento} />}
         </div>
       </div>
       {a.observacao && <p className="mt-2 text-sm text-zinc-400 italic">“{a.observacao}”</p>}

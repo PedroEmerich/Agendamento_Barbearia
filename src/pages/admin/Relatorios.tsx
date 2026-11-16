@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ErroCaixa, FotoBarbeiro, SeloStatus } from '../../components/ui';
+import { SeloPagamento } from '../../components/Pagamento';
 import { api } from '../../lib/api';
 import { agoraSP, formatarDataCurta, formatarPreco, somarDias } from '../../lib/datas';
 import type { DadosRelatorio } from '../../lib/exportar';
@@ -345,7 +346,14 @@ export default function Relatorios() {
                       <SeloStatus status={a.status} />
                     </td>
                     <td className="px-5 py-2.5 text-right text-zinc-100 tabular-nums">
-                      {a.assinatura_id ? <SeloPlano /> : formatarPreco(a.preco)}
+                      {a.assinatura_id ? (
+                        <SeloPlano />
+                      ) : (
+                        <span className="inline-flex flex-col items-end gap-1">
+                          {formatarPreco(a.preco)}
+                          <SeloPagamento pagamento={a.pagamento} />
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}

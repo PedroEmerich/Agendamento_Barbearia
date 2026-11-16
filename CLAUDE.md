@@ -17,3 +17,5 @@ fonte de verdade — leia antes de mudanças grandes e siga as fases na ordem.
 - O front só fala com o back-end por `src/lib/api.ts`. Com `VITE_DEMO` diferente de `false`, as
   ações são atendidas por `src/lib/mock.ts` (dados no localStorage); o contrato é o da seção 5.3.
 - Classes de componente (`btn-gold`, `card`, `campo`…) ficam em `src/index.css` como `@utility`.
+- Segredos (chave do Asaas, tokens) só em variáveis de ambiente do servidor (`api/`), nunca no
+  código, no repositório ou em variáveis `VITE_*`. Testes de pagamento usam o sandbox do Asaas.

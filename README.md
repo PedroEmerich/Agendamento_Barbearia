@@ -45,6 +45,46 @@ Entre em `/admin/login` (ou "Área do barbeiro" no rodapé):
 - **Relatórios:** período (semana, mês, mês passado, 3 meses ou datas livres), indicadores, por
   serviço, por dia da semana, por barbeiro e lista completa, com exportação para **PDF** e **Excel**.
 
+### Pagamento (na barbearia ou online pelo Asaas)
+
+- **Agendamento:** no último passo o cliente escolhe *Pagar na barbearia* ou *Pagar agora* (Pix ou
+  cartão). Online, o horário é reservado e aparece o QR do Pix com "copia e cola" (ou o botão da
+  página segura do Asaas para cartão); a tela acompanha o status sozinha até confirmar. Quem escolheu
+  pagar no balcão pode pagar online depois pelo link "meu agendamento".
+- **Plano:** contratação em `/assinar/:planoId` (plano, barbeiro, dia fixo opcional, dados e
+  pagamento). Online vira **assinatura mensal no Asaas** (cobrança automática todo mês); no balcão, o
+  plano fica "Aguardando 1º pagamento" até o admin clicar **Recebido no balcão** em Assinantes.
+- **Painel:** selo de pagamento em cada horário (Pago · Pix, Pagar no local, Aguardando, Estornado) e
+  coluna "Pagamento" no Excel. Concluir um atendimento "pagar no local" marca como pago; cancelar um
+  horário pago online marca para estorno.
+- **Na demonstração** não existe servidor: as cobranças são simuladas (QR ilustrativo, nenhum valor
+  cobrado) e há um botão "Simular pagamento aprovado" no lugar do aviso do Asaas.
+
+#### Como ligar o Asaas de verdade
+
+A integração roda **só no servidor** (funções da Vercel em `api/`): `api/pagamentos.ts` cria e
+consulta cobranças e `api/asaas/webhook.ts` recebe as confirmações. O valor cobrado vem do banco,
+nunca do navegador. GitHub Pages não executa essas funções; para pagamentos reais o site precisa
+estar publicado na Vercel com `VITE_DEMO=false` e o back-end (Apps Script) pronto.
+
+1. Crie uma conta de **homologação (sandbox)** no Asaas e gere uma chave (`$aact_hmlg_...`) para testar.
+2. Na Vercel, cadastre as variáveis `ASAAS_API_KEY`, `ASAAS_AMBIENTE=sandbox` e
+   `ASAAS_WEBHOOK_TOKEN` (um texto aleatório com 32+ caracteres). **Nunca** coloque a chave no
+   código, no `.env` versionado ou em variável com prefixo `VITE_` (essas vão para o navegador).
+3. No Asaas, crie o webhook apontando para `https://<seu-dominio>/api/asaas/webhook`, com o mesmo
+   token de autenticação e os eventos de cobrança (`PAYMENT_CONFIRMED`, `PAYMENT_RECEIVED`,
+   `PAYMENT_OVERDUE`, `PAYMENT_REFUNDED`, `PAYMENT_DELETED`).
+4. Testado tudo no sandbox, troque para a chave de produção (`$aact_prod_...`) e
+   `ASAAS_AMBIENTE=producao`. A função recusa chave de produção com ambiente de sandbox e vice-versa.
+
+O Apps Script precisa de três ações **internas** (só o servidor chama, com o `API_SECRET`):
+
+| Ação | Recebe | Faz |
+|---|---|---|
+| `dadosParaCobranca` | `{ tipo: 'agendamento' \| 'assinatura', token }` | Devolve `{ referencia ('ag:<id>' ou 'as:<id>'), valor, descricao, cliente: { nome, telefone }, cobranca_existente }` a partir do banco |
+| `registrarCobranca` | `{ referencia, cobrancaId, metodo, asaasAssinaturaId? }` | Grava a cobrança no agendamento/assinatura (pagamento `PENDENTE`) |
+| `processarPagamentoAsaas` | `{ eventoId, evento, cobrancaId, status, referencia, asaasAssinaturaId, valor }` | Ignora `eventoId` repetido; `PAGO` marca o agendamento como pago ou ativa/renova a assinatura (`pago_ate`); `VENCIDO` deixa a assinatura `ATRASADA`; `ESTORNADO` registra o estorno |
+
 ### Planos de assinatura
 
 - **Página inicial:** seção "Planos" com os três planos e o botão "Quero assinar" (WhatsApp).

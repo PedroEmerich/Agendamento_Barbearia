@@ -8,6 +8,10 @@ import type {
   CodigoErro,
   Assinatura,
   AssinaturaCliente,
+  Cobranca,
+  FormaPagamento,
+  MetodoPagamento,
+  Pagamento,
   AssinaturaPainel,
   ConfigPublica,
   Horario,
@@ -19,6 +23,7 @@ import type {
 import { calcularSlots, type Intervalo } from './disponibilidade';
 import { agoraSP, diaSemana, hhmmParaMin, minParaHhmm, somarDias } from './datas';
 import { normalizarTelefone } from './telefone';
+import { normalizarCpf } from './cpf';
 import { gerarAgenda, type RegistroSemente } from './semente';
 import {
   ANTECEDENCIA_TROCA_MIN,
@@ -63,8 +68,14 @@ export const CONFIG: ConfigPublica = {
     { dias: 'Domingo e segunda', horario: 'Fechado' },
   ],
   horario_semana: [
-    ...[2, 3, 4, 5].map((d) => ({ dia_semana: d, abre: '09:30', fecha: '20:00' })),
-    { dia_semana: 6, abre: '09:00', fecha: '18:00' },
+    ...[2, 3, 4, 5].map((d) => ({
+      dia_semana: d,
+      abre: '09:30',
+      fecha: '20:00',
+      pausa_inicio: '12:30',
+      pausa_fim: '13:30',
+    })),
+    { dia_semana: 6, abre: '09:00', fecha: '18:00', pausa_inicio: '12:00', pausa_fim: '13:00' },
   ],
 };
 
@@ -204,6 +215,9 @@ function assinaturasDeExemplo(hoje: string): Assinatura[] {
     status: 'ATIVA',
     inicio: somarDias(hoje, -diasAtras),
     pago_ate: mesAtual,
+    // Metade dos exemplos paga pelo Asaas (recorrente), o resto na barbearia.
+    pagamento_forma: ['a1', 'a2', 'a5', 'a9'].includes(id) ? 'ONLINE' : 'NA_BARBEARIA',
+    cobranca_pendente: null,
     ...extra,
   });
   return [
@@ -238,6 +252,8 @@ interface Salvo {
   assinaturas?: Assinatura[];
   /** Mudanças nas assinaturas de exemplo (status, pagamento, dia fixo). */
   alteracoesAssinatura?: Record<string, Partial<Assinatura>>;
+  /** Cobranças simuladas (na demonstração não há gateway). */
+  cobrancas?: Record<string, Cobranca & { referencia: string }>;
 }
 let memoria: Registro[] | null = null;
 let salvo: Salvo = { criados: [], status: {} };
@@ -286,9 +302,13 @@ function carregar(): Registro[] {
     expediente: EXPEDIENTE,
     hoje: agora.data,
     agoraMin: agora.minutos,
+    simularUso: assinaturasDeExemplo(agora.data).map((a) => a.id),
   });
   const agenda = encaixarNaAgenda(semente, doPlano);
-  for (const r of agenda) if (salvo.status[r.id]) r.status = salvo.status[r.id];
+  for (const r of agenda) {
+    if (salvo.status[r.id]) r.status = salvo.status[r.id];
+    if (!r.assinatura_id) r.pagamento = pagamentoDeExemplo(r);
+  }
   memoria = [...agenda, ...salvo.criados];
   return memoria;
 }
@@ -301,8 +321,38 @@ function salvar(): void {
   }
 }
 
+/** ~30% dos horários de exemplo foram pagos online; o resto paga no balcão. */
+function pagamentoDeExemplo(r: Registro): Pagamento {
+  const h = hashTexto(r.id);
+  const online = h % 100 < 30;
+  const base: Pagamento = online
+    ? {
+        forma: 'ONLINE',
+        status: 'PAGO',
+        metodo: h % 3 === 0 ? 'CARTAO' : 'PIX',
+        cobranca_id: `pay_demo_${h.toString(36)}`,
+      }
+    : { forma: 'NA_BARBEARIA', status: 'A_RECEBER' };
+  return ajustarPagamento(base, r.status);
+}
+
+function hashTexto(t: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < t.length; i++) h = Math.imul(h ^ t.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+
+/** Concluir no balcão = recebido; cancelar algo pago online = estorno. */
+function ajustarPagamento(pg: Pagamento, status: StatusAgendamento): Pagamento {
+  if (status === 'CONCLUIDO' && pg.status === 'A_RECEBER') return { ...pg, status: 'PAGO' };
+  if (status === 'CANCELADO' && pg.forma === 'ONLINE' && pg.status === 'PAGO')
+    return { ...pg, status: 'ESTORNADO' };
+  return pg;
+}
+
 function mudarStatus(r: Registro, status: StatusAgendamento) {
   r.status = status;
+  if (r.pagamento) r.pagamento = ajustarPagamento(r.pagamento, status);
   if (r.id.startsWith('s-') || r.id.startsWith('p-')) salvo.status[r.id] = status;
   salvar();
 }
@@ -390,6 +440,7 @@ function paraCliente(r: Registro): AgendamentoCliente {
     assinatura_token: r.assinatura_id
       ? assinaturasMem.find((a) => a.id === r.assinatura_id)?.token
       : undefined,
+    pagamento: r.pagamento,
   };
 }
 
@@ -412,6 +463,51 @@ function autenticar(authToken: unknown): Usuario {
 
 // ---------------------------------------------------------------- planos
 
+/** Grava mudanças numa assinatura (cadastrada ou de exemplo) e regera os horários do plano. */
+function alterarAssinatura(id: string, mudancas: Partial<Assinatura>) {
+  const criada = salvo.assinaturas?.find((x) => x.id === id);
+  if (criada) Object.assign(criada, mudancas);
+  else
+    salvo.alteracoesAssinatura = {
+      ...salvo.alteracoesAssinatura,
+      [id]: { ...salvo.alteracoesAssinatura?.[id], ...mudancas },
+    };
+  salvar();
+  memoria = null;
+  carregar();
+}
+
+/** Cobrança de demonstração: QR e "copia e cola" de mentira, nenhum dinheiro envolvido. */
+function novaCobrancaSimulada(
+  referencia: string,
+  valor: number,
+  descricao: string,
+  metodo: MetodoPagamento,
+  recorrente: boolean,
+): Cobranca {
+  const id = `pay_demo_${novoToken().slice(0, 14)}`;
+  const c: Cobranca & { referencia: string } = {
+    id,
+    referencia,
+    status: 'PENDENTE',
+    valor,
+    metodo,
+    descricao,
+    vencimento: agoraSP().data,
+    recorrente,
+    simulada: true,
+    pix:
+      metodo === 'PIX'
+        ? {
+            copia_e_cola: `00020126580014BR.GOV.BCB.PIX0136DEMONSTRACAO-${id}5204000053039865406${valor.toFixed(2)}5802BR6304DEMO`,
+          }
+        : undefined,
+  };
+  salvo.cobrancas = { ...salvo.cobrancas, [id]: c };
+  salvar();
+  return c;
+}
+
 function janelaPara(token: unknown): number {
   if (!token) return CONFIG.janela_max_dias;
   carregar();
@@ -427,6 +523,8 @@ function assinaturaPorToken(token: unknown): Assinatura {
 }
 
 function exigirAtiva(a: Assinatura) {
+  if (a.status === 'AGUARDANDO_PAGAMENTO')
+    throw new ErroApi('PROIBIDO', 'Seu plano é ativado assim que o pagamento for confirmado.');
   if (a.status === 'PAUSADA')
     throw new ErroApi('PROIBIDO', 'Seu plano está pausado. Fale com a barbearia.');
   if (a.status === 'CANCELADA') throw new ErroApi('PROIBIDO', 'Este plano foi encerrado.');
@@ -517,6 +615,8 @@ function paraAssinaturaCliente(a: Assinatura): AssinaturaCliente {
     barbeiro_foto: barbeiro.foto_url,
     fixo: a.fixo,
     status: a.status,
+    pagamento_forma: a.pagamento_forma ?? 'NA_BARBEARIA',
+    cobranca_pendente: a.cobranca_pendente ?? null,
     ciclo: cicloDoMes(hoje),
     creditos: usoNoMes(registros, a.id, mesDe(hoje), plano.creditos_mes),
     proximos,
@@ -580,6 +680,121 @@ const acoes: Record<string, (p: Payload, authToken?: string | null) => unknown> 
 
   listarPlanos: () => PLANOS,
 
+  /** Contratação do plano pelo próprio cliente (página /assinar). Ativa após o pagamento. */
+  contratarPlano: (p) => {
+    const nome = String(p.clienteNome ?? '').trim();
+    const telefone = normalizarTelefone(String(p.clienteTelefone ?? ''));
+    if (p.honeypot) throw new ErroApi('VALIDACAO', 'Não foi possível concluir.');
+    if (nome.length < 2 || nome.length > 60) throw new ErroApi('VALIDACAO', 'Informe seu nome.');
+    if (!telefone) throw new ErroApi('VALIDACAO', 'Informe um WhatsApp válido, com DDD.');
+    if (!PLANOS.some((x) => x.id === p.planoId)) throw new ErroApi('VALIDACAO', 'Plano inválido.');
+    if (!BARBEIROS.some((x) => x.id === p.barbeiroId))
+      throw new ErroApi('VALIDACAO', 'Escolha o barbeiro.');
+    const fixo = (p.fixo as Assinatura['fixo']) ?? null;
+    if (fixo) {
+      const dia = EXPEDIENTE[fixo.dia_semana];
+      const servico = buscarServico(PLANOS.find((x) => x.id === p.planoId)!.servico_id);
+      const ini = hhmmParaMin(fixo.hora);
+      const fim = ini + servico.duracao_min;
+      if (!dia) throw new ErroApi('VALIDACAO', 'A barbearia não abre nesse dia.');
+      if (
+        ini < dia.jornada.inicio ||
+        fim > dia.jornada.fim ||
+        (ini < dia.pausa.fim && dia.pausa.inicio < fim)
+      ) {
+        throw new ErroApi('VALIDACAO', 'Esse horário fica fora do expediente.');
+      }
+    }
+    const hoje = agoraSP().data;
+    const forma: FormaPagamento = p.formaPagamento === 'ONLINE' ? 'ONLINE' : 'NA_BARBEARIA';
+    const nova: Assinatura = {
+      id: `n${novoToken().slice(0, 8)}`,
+      token: novoToken(),
+      cliente_nome: nome,
+      cliente_telefone: telefone,
+      plano_id: String(p.planoId),
+      barbeiro_id: String(p.barbeiroId),
+      fixo,
+      status: 'AGUARDANDO_PAGAMENTO',
+      inicio: hoje,
+      pago_ate: '',
+      pagamento_forma: forma,
+      cobranca_pendente: null,
+    };
+    salvo.assinaturas = [...(salvo.assinaturas ?? []), nova];
+    salvar();
+    memoria = null;
+    carregar();
+    return { token: nova.token };
+  },
+
+  /**
+   * Mesmo contrato do /api/pagamentos real (Asaas): o valor sai daqui, não do navegador.
+   * Se já existe cobrança pendente para o mesmo item, devolve a mesma.
+   */
+  iniciarPagamento: (p) => {
+    if (!normalizarCpf(String(p.cpf ?? '')))
+      throw new ErroApi('VALIDACAO', 'Informe um CPF válido.');
+    const metodo: MetodoPagamento = p.metodo === 'CARTAO' ? 'CARTAO' : 'PIX';
+    if (p.tipo === 'assinatura') {
+      const a = assinaturaPorToken(p.token);
+      const existente = a.cobranca_pendente && salvo.cobrancas?.[a.cobranca_pendente];
+      if (existente && existente.status === 'PENDENTE') return existente;
+      const plano = planoDe(a);
+      const c = novaCobrancaSimulada(
+        `as:${a.id}`,
+        plano.preco_mensal,
+        `${plano.nome} (mensal)`,
+        metodo,
+        true,
+      );
+      alterarAssinatura(a.id, { cobranca_pendente: c.id, pagamento_forma: 'ONLINE' });
+      return c;
+    }
+    const r = carregar().find((x) => x.token === p.token);
+    if (!r || r.assinatura_id) throw new ErroApi('NAO_ENCONTRADO', 'Agendamento não encontrado.');
+    if (r.pagamento?.status === 'PAGO')
+      throw new ErroApi('VALIDACAO', 'Este horário já está pago.');
+    const existente = r.pagamento?.cobranca_id && salvo.cobrancas?.[r.pagamento.cobranca_id];
+    if (existente && existente.status === 'PENDENTE') return existente;
+    const c = novaCobrancaSimulada(
+      `ag:${r.id}`,
+      r.preco,
+      `${r.servico_nome} — ${r.data} ${r.hora_inicio}`,
+      metodo,
+      false,
+    );
+    r.pagamento = { forma: 'ONLINE', status: 'PENDENTE', metodo, cobranca_id: c.id };
+    salvar();
+    return c;
+  },
+
+  consultarPagamento: (p) => {
+    const c = salvo.cobrancas?.[String(p.id)];
+    if (!c) throw new ErroApi('NAO_ENCONTRADO', 'Cobrança não encontrada.');
+    return c;
+  },
+
+  /** Só na demonstração: faz o papel do webhook do Asaas confirmando o pagamento. */
+  simularPagamento: (p) => {
+    const c = salvo.cobrancas?.[String(p.id)];
+    if (!c) throw new ErroApi('NAO_ENCONTRADO', 'Cobrança não encontrada.');
+    c.status = 'PAGO';
+    const [tipo, id] = c.referencia.split(':');
+    if (tipo === 'ag') {
+      const r = carregar().find((x) => x.id === id);
+      if (r?.pagamento) r.pagamento = { ...r.pagamento, status: 'PAGO' };
+    } else {
+      alterarAssinatura(id, {
+        status: 'ATIVA',
+        pago_ate: mesDe(agoraSP().data),
+        cobranca_pendente: null,
+      });
+    }
+    salvar();
+    return c;
+  },
+
   getAssinaturaPorToken: (p) => paraAssinaturaCliente(assinaturaPorToken(p.token)),
 
   /**
@@ -642,16 +857,7 @@ const acoes: Record<string, (p: Payload, authToken?: string | null) => unknown> 
     if (p.status) mudancas.status = p.status as Assinatura['status'];
     if (p.pago_ate) mudancas.pago_ate = String(p.pago_ate);
     if (p.fixo !== undefined) mudancas.fixo = p.fixo as Assinatura['fixo'];
-    const criada = salvo.assinaturas?.find((x) => x.id === a.id);
-    if (criada) Object.assign(criada, mudancas);
-    else
-      salvo.alteracoesAssinatura = {
-        ...salvo.alteracoesAssinatura,
-        [a.id]: { ...salvo.alteracoesAssinatura?.[a.id], ...mudancas },
-      };
-    salvar();
-    memoria = null; // regera os horários do plano com a mudança
-    carregar();
+    alterarAssinatura(a.id, mudancas);
     return paraAssinaturaPainel(assinaturasMem.find((x) => x.id === a.id)!);
   },
 
@@ -735,6 +941,14 @@ const acoes: Record<string, (p: Payload, authToken?: string | null) => unknown> 
       observacao: String(p.observacao ?? '').slice(0, 200),
       status: 'AGENDADO',
       origem: 'CLIENTE',
+      pagamento:
+        p.formaPagamento === 'ONLINE'
+          ? {
+              forma: 'ONLINE',
+              status: 'PENDENTE',
+              metodo: p.metodoPagamento === 'CARTAO' ? 'CARTAO' : 'PIX',
+            }
+          : { forma: 'NA_BARBEARIA', status: 'A_RECEBER' },
     };
     registros.push(registro);
     salvo.criados.push(registro);

@@ -24,7 +24,14 @@ import {
 import { baixarIcs } from '../../lib/ics';
 import { mascararTelefone, normalizarTelefone } from '../../lib/telefone';
 import { useConsulta } from '../../lib/useConsulta';
-import type { AgendamentoCliente, Barbeiro, Horario, Servico } from '../../types';
+import type { AgendamentoCliente, Barbeiro, Cobranca, Horario, Servico } from '../../types';
+import {
+  ESCOLHA_INICIAL,
+  EscolhaPagamento,
+  escolhaValida,
+  PainelPagamento,
+  type EscolhaPagamentoValor,
+} from '../../components/Pagamento';
 
 const PASSOS = ['Serviço', 'Barbeiro', 'Dia', 'Horário', 'Seus dados'];
 const TITULOS = ['Qual serviço?', 'Com quem?', 'Que dia?', 'Que horas?', 'Quase lá'];
@@ -144,8 +151,18 @@ function minFim(hora: string, duracao: number) {
 
 /* ------------------------------------------------------------- confirmação */
 
-function Confirmacao({ agendamento: a }: { agendamento: AgendamentoCliente }) {
+function Confirmacao({
+  agendamento: a,
+  cobranca,
+  erroPagamento,
+}: {
+  agendamento: AgendamentoCliente;
+  cobranca: Cobranca | null;
+  erroPagamento: string | null;
+}) {
   const config = useConsulta(api.getConfigPublica, []);
+  const [pago, setPago] = useState(cobranca?.status === 'PAGO');
+  const aguardando = !!cobranca && !pago;
   const [copiado, setCopiado] = useState(false);
   const link = `${window.location.origin}${import.meta.env.BASE_URL}meu-agendamento/${a.token}`;
 
@@ -169,10 +186,29 @@ function Confirmacao({ agendamento: a }: { agendamento: AgendamentoCliente }) {
         <span className="absolute inset-0 animate-ping rounded-full bg-emerald-400/30 [animation-iteration-count:2]" />
         <IconeCheck width={30} height={30} />
       </span>
-      <h1 className="titulo mt-6 animate-entrar [animation-delay:120ms]">Horário marcado!</h1>
+      <h1 className="titulo mt-6 animate-entrar [animation-delay:120ms]">
+        {aguardando ? 'Horário reservado!' : 'Horário marcado!'}
+      </h1>
       <p className="mt-3 animate-entrar text-zinc-400 [animation-delay:200ms]">
-        Você recebe um lembrete no WhatsApp cerca de 2 horas antes.
+        {aguardando
+          ? 'Falta só o pagamento. Assim que ele for confirmado, está tudo certo.'
+          : 'Você recebe um lembrete no WhatsApp cerca de 2 horas antes.'}
       </p>
+
+      {cobranca && (
+        <div className="mt-6 animate-entrar [animation-delay:250ms]">
+          <PainelPagamento cobranca={cobranca} onPago={() => setPago(true)} />
+        </div>
+      )}
+      {erroPagamento && (
+        <p
+          role="alert"
+          className="mt-6 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-left text-sm text-amber-100"
+        >
+          {erroPagamento} Seu horário está garantido: dá para tentar de novo pelo link do
+          agendamento ou pagar na barbearia.
+        </p>
+      )}
 
       {/* Ticket */}
       <div className="mt-8 animate-entrar text-left [animation-delay:300ms]">
@@ -402,6 +438,9 @@ export default function Agendar() {
   const [enviando, setEnviando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
   const [resultado, setResultado] = useState<AgendamentoCliente | null>(null);
+  const [pagamento, setPagamento] = useState<EscolhaPagamentoValor>(ESCOLHA_INICIAL);
+  const [cobranca, setCobranca] = useState<Cobranca | null>(null);
+  const [erroPagamento, setErroPagamento] = useState<string | null>(null);
   const tituloRef = useRef<HTMLHeadingElement>(null);
   const primeiraVez = useRef(true);
   const etapasRef = useRef<HTMLElement>(null);
@@ -473,7 +512,10 @@ export default function Agendar() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [passo]);
 
-  if (resultado) return <Confirmacao agendamento={resultado} />;
+  if (resultado)
+    return (
+      <Confirmacao agendamento={resultado} cobranca={cobranca} erroPagamento={erroPagamento} />
+    );
 
   const achado = todosBarbeiros.dados?.find((b) => b.id === barbeiroId);
   const barbeiroEscolhido =
@@ -483,7 +525,8 @@ export default function Agendar() {
         ? { nome: achado.nome, foto: achado.foto_url }
         : null;
   const telefoneValido = normalizarTelefone(telefone) !== null;
-  const podeEnviar = nome.trim().length >= 2 && telefoneValido && aceite && !enviando;
+  const podeEnviar =
+    nome.trim().length >= 2 && telefoneValido && aceite && escolhaValida(pagamento) && !enviando;
 
   function escolherServico(s: Servico) {
     if (s.id !== servico?.id) {
@@ -519,8 +562,24 @@ export default function Agendar() {
         clienteTelefone: telefone,
         observacao: observacao.trim(),
         honeypot,
+        formaPagamento: pagamento.forma,
+        metodoPagamento: pagamento.metodo,
       });
       ultimoAgendamento.gravar(criado.token);
+      // O horário já está reservado; a cobrança online é gerada logo em seguida.
+      if (pagamento.forma === 'ONLINE') {
+        try {
+          setCobranca(
+            await api.iniciarPagamento('agendamento', criado.token, {
+              metodo: pagamento.metodo,
+              cpf: pagamento.cpf,
+              email: pagamento.email || undefined,
+            }),
+          );
+        } catch (e) {
+          setErroPagamento(e instanceof Error ? e.message : 'Não foi possível gerar o pagamento.');
+        }
+      }
       setResultado(criado);
     } catch (erro) {
       if (erro instanceof ErroApi && erro.code === 'SLOT_INDISPONIVEL') {
@@ -849,6 +908,7 @@ export default function Agendar() {
                     />
                   </label>
                 </div>
+                <EscolhaPagamento valor={pagamento} onMudar={setPagamento} />
                 <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 text-sm text-zinc-300">
                   <input
                     type="checkbox"
@@ -875,7 +935,10 @@ export default function Agendar() {
                     </>
                   ) : (
                     <>
-                      Confirmar agendamento <IconeSeta />
+                      {pagamento.forma === 'ONLINE' && servico
+                        ? `Confirmar e pagar ${formatarPreco(servico.preco)}`
+                        : 'Confirmar agendamento'}{' '}
+                      <IconeSeta />
                     </>
                   )}
                 </button>
