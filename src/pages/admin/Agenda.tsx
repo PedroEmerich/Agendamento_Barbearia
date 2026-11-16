@@ -1,112 +1,77 @@
-import { useEffect, useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ErroCaixa, FotoBarbeiro, Skeletons } from '../../components/ui';
+import { api } from '../../lib/api';
 import {
-  ErroCaixa,
-  FotoBarbeiro,
-  IconeWhatsapp,
-  Marca,
-  SeloStatus,
-  Skeletons,
-} from '../../components/ui';
-import { api, MODO_DEMO, sessao } from '../../lib/api';
-import { agoraSP, formatarDataLonga, formatarPreco, somarDias } from '../../lib/datas';
-import { formatarTelefone } from '../../lib/telefone';
+  agoraSP,
+  formatarDataLonga,
+  formatarPreco,
+  hhmmParaMin,
+  nomeDiaCurto,
+  somarDias,
+} from '../../lib/datas';
+import { resumir } from '../../lib/relatorios';
 import { useConsulta } from '../../lib/useConsulta';
 import type { AgendamentoPainel, StatusAgendamento } from '../../types';
+import { CartaoAgendamento, FiltroBarbeiro, usePainel } from './painel';
 
-const ACOES: { status: StatusAgendamento; rotulo: string; de: StatusAgendamento[] }[] = [
-  { status: 'CONFIRMADO', rotulo: 'Confirmar', de: ['AGENDADO'] },
-  { status: 'CONCLUIDO', rotulo: 'Concluir', de: ['AGENDADO', 'CONFIRMADO'] },
-  { status: 'NAO_COMPARECEU', rotulo: 'Não veio', de: ['AGENDADO', 'CONFIRMADO'] },
-  { status: 'CANCELADO', rotulo: 'Cancelar', de: ['AGENDADO', 'CONFIRMADO'] },
-];
-
-function Cartao({
-  a,
-  onMudar,
-  ocupado,
-}: {
-  a: AgendamentoPainel;
-  onMudar: (status: StatusAgendamento) => void;
-  ocupado: boolean;
-}) {
-  const acoes = ACOES.filter((x) => x.de.includes(a.status));
-  return (
-    <li
-      className={`card relative overflow-hidden p-4 pl-5 transition hover:border-white/15 ${a.status === 'CANCELADO' ? 'opacity-50' : ''}`}
-    >
-      <span
-        aria-hidden="true"
-        className={`absolute inset-y-3 left-0 w-1 rounded-r-full ${
-          {
-            AGENDADO: 'bg-sky-400',
-            CONFIRMADO: 'bg-emerald-400',
-            CANCELADO: 'bg-red-400',
-            CONCLUIDO: 'bg-zinc-500',
-            NAO_COMPARECEU: 'bg-amber-400',
-          }[a.status]
-        }`}
-      />
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="font-display text-lg font-bold text-gold-300">
-            {a.hora_inicio}{' '}
-            <span className="text-sm font-medium text-zinc-500">– {a.hora_fim}</span>
-          </p>
-          <p className="font-semibold text-zinc-50">{a.cliente_nome}</p>
-          <p className="text-sm text-zinc-400">
-            {a.servico_nome} · {formatarPreco(a.preco)}
-          </p>
-        </div>
-        <SeloStatus status={a.status} />
-      </div>
-      {a.observacao && <p className="mt-2 text-sm text-zinc-400 italic">“{a.observacao}”</p>}
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        {acoes.map((x) => (
-          <button
-            key={x.status}
-            disabled={ocupado}
-            onClick={() => onMudar(x.status)}
-            className={`min-h-9 cursor-pointer rounded-full border px-3 text-xs font-semibold transition disabled:opacity-40 ${x.status === 'CANCELADO' ? 'border-red-500/40 text-red-300 hover:bg-red-500/10' : 'border-white/10 bg-white/[0.03] text-zinc-200 hover:border-gold-400 hover:text-gold-300'}`}
-          >
-            {x.rotulo}
-          </button>
-        ))}
-        <a
-          href={`https://wa.me/${a.cliente_telefone}`}
-          target="_blank"
-          rel="noreferrer"
-          aria-label={`Abrir conversa com ${a.cliente_nome} — ${formatarTelefone(a.cliente_telefone)}`}
-          className="ml-auto flex h-9 w-9 items-center justify-center rounded-full border border-white/10 text-emerald-300 hover:border-emerald-400"
-        >
-          <IconeWhatsapp width={18} height={18} />
-        </a>
-      </div>
-    </li>
-  );
-}
+/** Quantos dias à frente o calendário deixa escolher. */
+const DIAS_A_FRENTE = 60;
+const DIAS_NA_FAIXA = 14;
 
 export default function Agenda() {
-  const navegar = useNavigate();
-  const [data, setData] = useState(() => agoraSP().data);
+  const { eu, ehAdmin, barbeiros, diaAberto, proximoDiaAberto } = usePainel();
+  const hoje = agoraSP().data;
+  const limite = somarDias(hoje, DIAS_A_FRENTE);
+  // Se hoje a barbearia não abre, começa no próximo dia de trabalho.
+  const [data, setData] = useState(() => proximoDiaAberto(hoje));
+  const [filtro, setFiltro] = useState('');
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [erroAcao, setErroAcao] = useState<string | null>(null);
-  const autenticado = sessao.ler() !== null;
+  const faixa = useRef<HTMLDivElement>(null);
 
-  const usuario = useConsulta(autenticado ? api.me : null, []);
-  const barbeiros = useConsulta(autenticado ? () => api.listarBarbeiros() : null, []);
-  const agenda = useConsulta(autenticado ? () => api.listarAgendamentos(data) : null, [data]);
+  // Uma consulta cobre a faixa de dias; outra, o dia escolhido (pode estar além da faixa).
+  const fimFaixa = somarDias(hoje, DIAS_NA_FAIXA - 1);
+  const periodo = useConsulta(
+    () => api.listarAgendamentosPeriodo(hoje, fimFaixa),
+    [hoje, fimFaixa],
+  );
+  const dia = useConsulta(() => api.listarAgendamentos(data), [data]);
 
-  // Mantém a agenda fresca enquanto a aba estiver visível.
-  const { recarregar } = agenda;
+  const { recarregar } = dia;
+  const recarregarPeriodo = periodo.recarregar;
   useEffect(() => {
-    const id = setInterval(() => !document.hidden && recarregar(), 60_000);
+    const id = setInterval(() => {
+      if (document.hidden) return;
+      recarregar();
+      recarregarPeriodo();
+    }, 60_000);
     return () => clearInterval(id);
-  }, [recarregar]);
+  }, [recarregar, recarregarPeriodo]);
 
-  if (!autenticado || usuario.erro) {
-    sessao.gravar(null);
-    return <Navigate to="/admin/login" replace />;
+  // Mantém o dia escolhido visível na faixa.
+  useEffect(() => {
+    const el = faixa.current?.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (el && faixa.current) {
+      faixa.current.scrollTo({
+        left: el.offsetLeft - faixa.current.clientWidth / 2 + el.offsetWidth / 2,
+        behavior: 'smooth',
+      });
+    }
+  }, [data]);
+
+  const contagem = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const a of periodo.dados ?? []) {
+      if (a.status === 'CANCELADO' || (filtro && a.barbeiro_id !== filtro)) continue;
+      m.set(a.data, (m.get(a.data) ?? 0) + 1);
+    }
+    return m;
+  }, [periodo.dados, filtro]);
+
+  function irPara(d: string) {
+    if (d < hoje) d = hoje;
+    if (d > limite) d = limite;
+    setData(d);
   }
 
   async function mudar(id: string, status: StatusAgendamento) {
@@ -115,6 +80,7 @@ export default function Agenda() {
     try {
       await api.atualizarStatus(id, status);
       recarregar();
+      recarregarPeriodo();
     } catch (e) {
       setErroAcao(e instanceof Error ? e.message : 'Não foi possível atualizar.');
     } finally {
@@ -122,126 +88,163 @@ export default function Agenda() {
     }
   }
 
-  const colunas = (barbeiros.dados ?? []).filter(
-    (b) => usuario.dados?.papel === 'ADMIN' || b.id === usuario.dados?.barbeiro_id,
-  );
-  const hoje = agoraSP().data;
-  const ativos = (agenda.dados ?? []).filter((a) => a.status !== 'CANCELADO');
+  const itens = (dia.dados ?? []).filter((a) => !filtro || a.barbeiro_id === filtro);
+  const r = resumir(itens);
+  const confirmados = itens.filter((a) => a.status === 'CONFIRMADO').length;
+  const agora = agoraSP();
+  // O próximo cliente do dia recebe destaque (só faz sentido hoje).
+  const proximoId =
+    data === hoje
+      ? itens.find(
+          (a) =>
+            (a.status === 'AGENDADO' || a.status === 'CONFIRMADO') &&
+            hhmmParaMin(a.hora_fim) > agora.minutos,
+        )?.id
+      : undefined;
+
+  const colunas = ehAdmin && !filtro ? barbeiros : null;
+  const lista = (xs: AgendamentoPainel[], mostrarBarbeiro: boolean) =>
+    xs.length === 0 ? (
+      <p className="card py-10 text-center text-sm text-zinc-500">
+        {diaAberto(data) ? 'Nenhum horário marcado.' : 'A barbearia não abre neste dia.'}
+      </p>
+    ) : (
+      <ul className="space-y-3">
+        {xs.map((a) => (
+          <CartaoAgendamento
+            key={a.id}
+            a={a}
+            ocupado={ocupado === a.id}
+            onMudar={(s) => mudar(a.id, s)}
+            barbeiro={mostrarBarbeiro ? barbeiros.find((b) => b.id === a.barbeiro_id) : undefined}
+            destaque={a.id === proximoId ? 'Próximo cliente' : undefined}
+          />
+        ))}
+      </ul>
+    );
 
   return (
-    <div className="grao relative min-h-dvh">
-      <div
-        aria-hidden="true"
-        className="pointer-events-none fixed -top-40 left-1/2 h-96 w-[60rem] -translate-x-1/2 rounded-full bg-gold-500/10 blur-[120px]"
-      />
-      {MODO_DEMO && (
-        <p className="relative border-b border-gold-400/20 bg-gold-400/10 px-4 py-1.5 text-center text-[0.7rem] font-medium text-gold-200">
-          Painel demonstrativo · dados de exemplo, guardados só neste aparelho.
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="eyebrow">{eu ? 'Minha agenda' : 'Agenda da barbearia'}</p>
+          <h1 className="titulo mt-3 first-letter:uppercase">{formatarDataLonga(data)}</h1>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            className="btn-ghost h-11 w-11 px-0"
+            onClick={() => irPara(somarDias(data, -1))}
+            disabled={data <= hoje}
+            aria-label="Dia anterior"
+          >
+            ‹
+          </button>
+          <input
+            type="date"
+            className="campo w-auto [color-scheme:dark]"
+            value={data}
+            min={hoje}
+            max={limite}
+            onChange={(e) => e.target.value && irPara(e.target.value)}
+            aria-label="Escolher data"
+          />
+          <button
+            className="btn-ghost h-11 w-11 px-0"
+            onClick={() => irPara(somarDias(data, 1))}
+            disabled={data >= limite}
+            aria-label="Próximo dia"
+          >
+            ›
+          </button>
+        </div>
+      </div>
+
+      {/* Faixa dos próximos dias com a quantidade de horários */}
+      <div ref={faixa} className="sem-barra -mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+        {Array.from({ length: DIAS_NA_FAIXA }, (_, i) => somarDias(hoje, i)).map((d) => {
+          const aberto = diaAberto(d);
+          const n = contagem.get(d) ?? 0;
+          const sel = d === data;
+          return (
+            <button
+              key={d}
+              type="button"
+              aria-pressed={sel}
+              onClick={() => irPara(d)}
+              className={`flex w-16 shrink-0 cursor-pointer flex-col items-center rounded-2xl border py-2.5 transition ${
+                sel
+                  ? 'border-gold-300 bg-gradient-to-b from-gold-300 to-gold-500 text-ink-950'
+                  : aberto
+                    ? 'border-white/10 bg-white/[0.03] text-zinc-100 hover:border-gold-400/50'
+                    : 'border-transparent text-zinc-600'
+              }`}
+            >
+              <span className="text-[0.65rem] font-semibold uppercase">
+                {d === hoje ? 'hoje' : nomeDiaCurto(d)}
+              </span>
+              <span className="font-display text-xl font-bold">{d.slice(8)}</span>
+              <span className={`text-[0.65rem] ${sel ? 'text-ink-950/70' : 'text-zinc-500'}`}>
+                {!aberto ? 'folga' : periodo.dados ? `${n} hor.` : '·'}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {ehAdmin && <FiltroBarbeiro valor={filtro} onMudar={setFiltro} />}
+
+      {/* Resumo do dia */}
+      {dia.dados && itens.length > 0 && (
+        <div className="flex flex-wrap gap-2 text-sm">
+          <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5">
+            <strong className="text-zinc-50">{r.total}</strong>{' '}
+            <span className="text-zinc-400">atendimentos</span>
+          </span>
+          <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5">
+            <strong className="text-zinc-50">{confirmados}</strong>{' '}
+            <span className="text-zinc-400">confirmados</span>
+          </span>
+          <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5">
+            <span className="text-zinc-400">Previsto</span>{' '}
+            <strong className="text-gold-200">
+              {formatarPreco(r.faturamentoPrevisto + r.faturamento)}
+            </strong>
+          </span>
+        </div>
+      )}
+
+      {erroAcao && (
+        <p role="alert" className="text-sm text-red-300">
+          {erroAcao}
         </p>
       )}
-      <header className="vidro sticky top-0 z-20 border-x-0 border-t-0 !bg-ink-950/60">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
-          <Marca />
-          <div className="flex items-center gap-3 text-sm">
-            <span className="hidden text-zinc-400 sm:inline">{usuario.dados?.nome}</span>
-            <button
-              className="btn-ghost px-4"
-              onClick={() => {
-                sessao.gravar(null);
-                navegar('/admin/login');
-              }}
-            >
-              Sair
-            </button>
-          </div>
-        </div>
-      </header>
+      {dia.erro && <ErroCaixa mensagem={dia.erro} onTentar={dia.recarregar} />}
 
-      <main className="relative mx-auto max-w-6xl px-4 py-8">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="titulo">Agenda do dia</h1>
-            <p className="mt-1 text-sm text-zinc-400 first-letter:uppercase">
-              {formatarDataLonga(data)}
-              {agenda.dados && ` · ${ativos.length} atendimento(s)`}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              className="btn-ghost h-11 w-11 px-0"
-              onClick={() => setData(somarDias(data, -1))}
-              aria-label="Dia anterior"
-            >
-              ‹
-            </button>
-            <input
-              type="date"
-              className="campo w-auto [color-scheme:dark]"
-              value={data}
-              onChange={(e) => e.target.value && setData(e.target.value)}
-              aria-label="Data da agenda"
-            />
-            <button
-              className="btn-ghost h-11 w-11 px-0"
-              onClick={() => setData(somarDias(data, 1))}
-              aria-label="Próximo dia"
-            >
-              ›
-            </button>
-            {data !== hoje && (
-              <button className="btn-ghost px-4" onClick={() => setData(hoje)}>
-                Hoje
-              </button>
-            )}
-          </div>
+      {!dia.dados && dia.carregando ? (
+        <div className="grid gap-3 lg:grid-cols-3">
+          <Skeletons n={3} className="h-40" />
         </div>
-
-        {erroAcao && (
-          <p role="alert" className="mt-4 text-sm text-red-300">
-            {erroAcao}
-          </p>
-        )}
-        {agenda.erro && (
-          <div className="mt-6">
-            <ErroCaixa mensagem={agenda.erro} onTentar={agenda.recarregar} />
-          </div>
-        )}
-
-        <div className={`mt-6 grid gap-6 ${colunas.length > 1 ? 'lg:grid-cols-3' : 'max-w-md'}`}>
-          {!agenda.dados && agenda.carregando && <Skeletons n={3} className="h-72" />}
-          {agenda.dados &&
-            colunas.map((b) => {
-              const itens = agenda.dados!.filter((a) => a.barbeiro_id === b.id);
-              return (
-                <section key={b.id} aria-label={`Agenda de ${b.nome}`}>
-                  <h2 className="card flex items-center gap-3 rounded-full p-1.5 pr-4 font-semibold text-zinc-50">
-                    <FotoBarbeiro nome={b.nome} foto={b.foto_url} tamanho="h-10 w-10" />
-                    <span className="flex-1">{b.nome}</span>
-                    <span className="text-xs font-normal text-zinc-500">
-                      {itens.filter((a) => a.status !== 'CANCELADO').length} atend.
-                    </span>
-                  </h2>
-                  {itens.length === 0 ? (
-                    <p className="py-8 text-center text-sm text-zinc-500">
-                      Nenhum horário marcado.
-                    </p>
-                  ) : (
-                    <ul className="mt-3 space-y-3">
-                      {itens.map((a) => (
-                        <Cartao
-                          key={a.id}
-                          a={a}
-                          ocupado={ocupado === a.id}
-                          onMudar={(status) => mudar(a.id, status)}
-                        />
-                      ))}
-                    </ul>
-                  )}
-                </section>
-              );
-            })}
+      ) : colunas ? (
+        <div className="grid gap-6 lg:grid-cols-3">
+          {colunas.map((b) => {
+            const doBarbeiro = itens.filter((a) => a.barbeiro_id === b.id);
+            return (
+              <section key={b.id} aria-label={`Agenda de ${b.nome}`} className="min-w-0 space-y-3">
+                <h2 className="card flex items-center gap-3 rounded-full p-1.5 pr-4 font-semibold text-zinc-50">
+                  <FotoBarbeiro nome={b.nome} foto={b.foto_url} tamanho="h-10 w-10" />
+                  <span className="flex-1">{b.nome}</span>
+                  <span className="text-xs font-normal text-zinc-500">
+                    {doBarbeiro.filter((a) => a.status !== 'CANCELADO').length} atend.
+                  </span>
+                </h2>
+                {lista(doBarbeiro, false)}
+              </section>
+            );
+          })}
         </div>
-      </main>
+      ) : (
+        <div className="max-w-2xl">{lista(itens, false)}</div>
+      )}
     </div>
   );
 }

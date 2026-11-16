@@ -15,6 +15,7 @@ import type {
 import { calcularSlots, type Intervalo } from './disponibilidade';
 import { agoraSP, diaSemana, hhmmParaMin, minParaHhmm, somarDias } from './datas';
 import { normalizarTelefone } from './telefone';
+import { gerarAgenda, type RegistroSemente } from './semente';
 
 export class ErroApi extends Error {
   constructor(
@@ -132,16 +133,25 @@ const USUARIOS: (Usuario & { login: string; senha: string })[] = [
     papel: 'BARBEIRO',
     barbeiro_id: 'b2',
   },
+  { id: 'u3', nome: 'Davi', login: 'davi', senha: 'demo', papel: 'BARBEIRO', barbeiro_id: 'b1' },
+  { id: 'u4', nome: 'Renan', login: 'renan', senha: 'demo', papel: 'BARBEIRO', barbeiro_id: 'b3' },
 ];
 
 // ---------------------------------------------------------------- persistência
 
-interface Registro extends AgendamentoPainel {
-  token: string;
-}
+type Registro = RegistroSemente;
 
-const CHAVE = 'ug_demo_v2';
+/**
+ * A agenda de exemplo é gerada de novo a cada carregamento (é determinística). No
+ * navegador ficam só os agendamentos criados pelo visitante e as mudanças de status.
+ */
+const CHAVE = 'ug_demo_v3';
+interface Salvo {
+  criados: Registro[];
+  status: Record<string, StatusAgendamento>;
+}
 let memoria: Registro[] | null = null;
+let salvo: Salvo = { criados: [], status: {} };
 
 function aleatorio(tamanho: number, alfabeto: string): string {
   const bytes = new Uint8Array(tamanho);
@@ -152,89 +162,42 @@ function aleatorio(tamanho: number, alfabeto: string): string {
 const novoCodigo = () => aleatorio(6, 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789');
 const novoToken = () => aleatorio(40, 'abcdefghijklmnopqrstuvwxyz0123456789');
 
-/** Agenda de exemplo para o painel não aparecer vazio. */
-function semear(): Registro[] {
-  const clientes = [
-    'João P.',
-    'Lucas M.',
-    'Rafael S.',
-    'Bruno T.',
-    'Matheus R.',
-    'Gustavo A.',
-    'Caio F.',
-  ];
-  const grade: [string, string, string, StatusAgendamento][] = [
-    ['b1', '10:00', 's1', 'CONFIRMADO'],
-    ['b1', '11:00', 's3', 'AGENDADO'],
-    ['b1', '15:30', 's2', 'AGENDADO'],
-    ['b2', '09:30', 's3', 'CONFIRMADO'],
-    ['b2', '14:00', 's1', 'AGENDADO'],
-    ['b2', '17:00', 's5', 'AGENDADO'],
-    ['b3', '10:30', 's1', 'AGENDADO'],
-    ['b3', '16:00', 's4', 'CONFIRMADO'],
-  ];
-  const registros: Registro[] = [];
-  let data = agoraSP().data;
-  let dias = 0;
-  let n = 0;
-  while (dias < 3) {
-    if (EXPEDIENTE[diaSemana(data)]) {
-      for (const [barbeiroId, hora, servicoId, status] of grade.filter(
-        (_, i) => (i + dias) % 3 !== 2,
-      )) {
-        const servico = SERVICOS.find((s) => s.id === servicoId)!;
-        registros.push({
-          id: `seed-${n}`,
-          codigo: novoCodigo(),
-          token: novoToken(),
-          barbeiro_id: barbeiroId,
-          servico_nome: servico.nome,
-          duracao_min: servico.duracao_min,
-          preco: servico.preco,
-          data,
-          hora_inicio: hora,
-          hora_fim: minParaHhmm(hhmmParaMin(hora) + servico.duracao_min),
-          cliente_nome: clientes[n % clientes.length],
-          cliente_telefone: `55119${String(80000000 + n * 1234567).slice(0, 8)}`,
-          observacao: '',
-          status,
-          origem: 'CLIENTE',
-        });
-        n++;
-      }
-      dias++;
-    }
-    data = somarDias(data, 1);
-  }
-  return registros;
-}
+const PESOS: Record<string, number> = { s1: 40, s2: 14, s3: 30, s4: 9, s5: 7 };
 
 function carregar(): Registro[] {
   if (memoria) return memoria;
   try {
     const bruto = localStorage.getItem(CHAVE);
-    if (bruto) {
-      const salvo = JSON.parse(bruto) as { semeadoEm: string; registros: Registro[] };
-      // Resemeia a agenda de exemplo quando o dia vira, mantendo o que o visitante criou.
-      if (salvo.semeadoEm === agoraSP().data) return (memoria = salvo.registros);
-      memoria = [...semear(), ...salvo.registros.filter((r) => !r.id.startsWith('seed-'))];
-      salvar();
-      return memoria;
-    }
+    if (bruto) salvo = JSON.parse(bruto) as Salvo;
   } catch {
     // localStorage indisponível (aba anônima etc.): segue só em memória.
   }
-  memoria = semear();
-  salvar();
+  const agora = agoraSP();
+  const semente = gerarAgenda({
+    hoje: agora.data,
+    agoraMin: agora.minutos,
+    barbeiroIds: BARBEIROS.map((b) => b.id),
+    servicos: SERVICOS.map((sv) => ({ ...sv, peso: PESOS[sv.id] ?? 10 })),
+    expediente: EXPEDIENTE,
+    intervaloMin: CONFIG.intervalo_slot_min,
+  });
+  for (const r of semente) if (salvo.status[r.id]) r.status = salvo.status[r.id];
+  memoria = [...semente, ...salvo.criados];
   return memoria;
 }
 
 function salvar(): void {
   try {
-    localStorage.setItem(CHAVE, JSON.stringify({ semeadoEm: agoraSP().data, registros: memoria }));
+    localStorage.setItem(CHAVE, JSON.stringify(salvo));
   } catch {
     // idem
   }
+}
+
+function mudarStatus(r: Registro, status: StatusAgendamento) {
+  r.status = status;
+  if (r.id.startsWith('s-')) salvo.status[r.id] = status;
+  salvar();
 }
 
 // ---------------------------------------------------------------- regras
@@ -402,6 +365,7 @@ const acoes: Record<string, (p: Payload, authToken?: string | null) => unknown> 
       origem: 'CLIENTE',
     };
     registros.push(registro);
+    salvo.criados.push(registro);
     salvar();
     return paraCliente(registro);
   },
@@ -421,8 +385,7 @@ const acoes: Record<string, (p: Payload, authToken?: string | null) => unknown> 
         'Não dá mais para cancelar pelo site. Fale com a barbearia.',
       );
     }
-    registro.status = 'CANCELADO';
-    salvar();
+    mudarStatus(registro, 'CANCELADO');
     return paraCliente(registro);
   },
 
@@ -445,6 +408,20 @@ const acoes: Record<string, (p: Payload, authToken?: string | null) => unknown> 
       .map(paraPainel);
   },
 
+  /** Agendamentos de um intervalo de datas (dashboard e relatórios). */
+  listarAgendamentosPeriodo: (p, authToken) => {
+    const usuario = autenticar(authToken);
+    const de = String(p.de);
+    const ate = String(p.ate);
+    const filtro =
+      usuario.papel === 'ADMIN' ? (p.barbeiroId as string | undefined) : usuario.barbeiro_id;
+    return carregar()
+      .filter((r) => r.data >= de && r.data <= ate)
+      .filter((r) => !filtro || r.barbeiro_id === filtro)
+      .sort((a, b) => (a.data + a.hora_inicio).localeCompare(b.data + b.hora_inicio))
+      .map(paraPainel);
+  },
+
   atualizarStatus: (p, authToken) => {
     const usuario = autenticar(authToken);
     const registro = carregar().find((r) => r.id === p.id);
@@ -452,8 +429,7 @@ const acoes: Record<string, (p: Payload, authToken?: string | null) => unknown> 
     if (usuario.papel !== 'ADMIN' && registro.barbeiro_id !== usuario.barbeiro_id) {
       throw new ErroApi('PROIBIDO', 'Esse agendamento é de outro barbeiro.');
     }
-    registro.status = p.status as StatusAgendamento;
-    salvar();
+    mudarStatus(registro, p.status as StatusAgendamento);
     return paraPainel(registro);
   },
 };

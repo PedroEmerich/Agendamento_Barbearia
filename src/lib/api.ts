@@ -90,6 +90,8 @@ export const api = {
     chamar<{ authToken: string; usuario: Usuario }>('login', { login, senha }),
   me: () => chamar<Usuario>('me'),
   listarAgendamentos: (data: string) => chamar<AgendamentoPainel[]>('listarAgendamentos', { data }),
+  listarAgendamentosPeriodo: (de: string, ate: string, barbeiroId?: string) =>
+    chamar<AgendamentoPainel[]>('listarAgendamentosPeriodo', { de, ate, barbeiroId }),
   atualizarStatus: (id: string, status: StatusAgendamento) =>
     chamar<AgendamentoPainel>('atualizarStatus', { id, status }),
 };
