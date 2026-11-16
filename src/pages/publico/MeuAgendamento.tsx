@@ -62,7 +62,7 @@ export default function MeuAgendamento() {
               <div className="flex items-start justify-between gap-4 border-t border-white/[0.07] pt-5">
                 <div>
                   <p className="text-xs tracking-widest text-zinc-500 uppercase">Código</p>
-                  <p className="texto-ouro font-display text-3xl font-black tracking-[0.2em]">
+                  <p className="texto-ouro font-display text-2xl font-black tracking-[0.15em] sm:text-3xl sm:tracking-[0.2em]">
                     {a.codigo}
                   </p>
                 </div>
