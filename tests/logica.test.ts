@@ -39,7 +39,9 @@ describe('calcularSlots', () => {
   });
 
   it('bloqueio de dia inteiro e dia sem expediente não têm horários', () => {
-    expect(calcularSlots({ ...base, ocupados: [{ inicio: 0, fim: 1440 }], duracaoMin: 30 })).toEqual([]);
+    expect(
+      calcularSlots({ ...base, ocupados: [{ inicio: 0, fim: 1440 }], duracaoMin: 30 }),
+    ).toEqual([]);
     expect(calcularSlots({ ...base, expediente: null, duracaoMin: 30 })).toEqual([]);
   });
 
@@ -73,7 +75,10 @@ describe('telefone', () => {
 describe('datas', () => {
   it('usa o fuso de São Paulo, não o do aparelho', () => {
     // 02:30 UTC ainda é o dia anterior em São Paulo (UTC-3).
-    expect(agoraSP(new Date('2026-11-13T02:30:00Z'))).toEqual({ data: '2026-11-12', minutos: 1410 });
+    expect(agoraSP(new Date('2026-11-13T02:30:00Z'))).toEqual({
+      data: '2026-11-12',
+      minutos: 1410,
+    });
   });
 
   it('soma dias atravessando o mês e formata', () => {
