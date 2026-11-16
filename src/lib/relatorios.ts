@@ -54,10 +54,13 @@ export interface Resumo {
   ticketMedio: number;
   /** Concluídos / (concluídos + faltas), de 0 a 1; null sem dados. */
   comparecimento: number | null;
+  /** Atendimentos (não cancelados) que usaram crédito de plano. */
+  doPlano: number;
 }
 
 export function resumir(ags: AgendamentoPainel[]): Resumo {
   let concluidos = 0;
+  let concluidosAvulsos = 0;
   let cancelados = 0;
   let faltas = 0;
   let pendentes = 0;
@@ -66,6 +69,7 @@ export function resumir(ags: AgendamentoPainel[]): Resumo {
   for (const a of ags) {
     if (a.status === 'CONCLUIDO') {
       concluidos++;
+      if (!a.assinatura_id) concluidosAvulsos++;
       faturamento += a.preco;
     } else if (a.status === 'CANCELADO') cancelados++;
     else if (a.status === 'NAO_COMPARECEU') faltas++;
@@ -82,8 +86,10 @@ export function resumir(ags: AgendamentoPainel[]): Resumo {
     pendentes,
     faturamento,
     faturamentoPrevisto,
-    ticketMedio: concluidos ? faturamento / concluidos : 0,
+    // Atendimentos de plano entram com R$ 0; o ticket médio considera só os avulsos.
+    ticketMedio: concluidosAvulsos ? faturamento / concluidosAvulsos : 0,
     comparecimento: concluidos + faltas ? concluidos / (concluidos + faltas) : null,
+    doPlano: ags.filter((a) => a.assinatura_id && a.status !== 'CANCELADO').length,
   };
 }
 
