@@ -207,10 +207,10 @@ function Confirmacao({ agendamento: a }: { agendamento: AgendamentoCliente }) {
           <span className="absolute top-1/2 -right-3 h-6 w-6 -translate-y-1/2 rounded-full bg-ink-950" />
           <span className="absolute inset-x-5 top-1/2 border-t border-dashed border-white/15" />
         </div>
-        <div className="card flex items-center justify-between rounded-t-none border-t-0 p-6">
+        <div className="card flex flex-wrap items-end justify-between gap-x-4 gap-y-2 rounded-t-none border-t-0 p-6">
           <div>
             <p className="text-xs tracking-widest text-zinc-500 uppercase">Código</p>
-            <p className="texto-ouro font-display text-3xl font-black tracking-[0.2em]">
+            <p className="texto-ouro font-display text-2xl font-black tracking-[0.15em] sm:text-3xl sm:tracking-[0.2em]">
               {a.codigo}
             </p>
           </div>
@@ -227,10 +227,10 @@ function Confirmacao({ agendamento: a }: { agendamento: AgendamentoCliente }) {
           <IconeCalendario /> Adicionar ao calendário
         </button>
         <div className="grid grid-cols-2 gap-3">
-          <button className="btn-ghost" onClick={copiar}>
+          <button className="btn-ghost px-3 whitespace-nowrap" onClick={copiar}>
             {copiado ? 'Copiado!' : 'Copiar link'}
           </button>
-          <Link to={`/meu-agendamento/${a.token}`} className="btn-ghost">
+          <Link to={`/meu-agendamento/${a.token}`} className="btn-ghost px-3 whitespace-nowrap">
             Ver ou cancelar
           </Link>
         </div>
@@ -404,6 +404,7 @@ export default function Agendar() {
   const [resultado, setResultado] = useState<AgendamentoCliente | null>(null);
   const tituloRef = useRef<HTMLHeadingElement>(null);
   const primeiraVez = useRef(true);
+  const etapasRef = useRef<HTMLElement>(null);
 
   const hoje = useMemo(() => agoraSP().data, []);
   const config = useConsulta(api.getConfigPublica, []);
@@ -450,6 +451,18 @@ export default function Agendar() {
       if (passo > 1) setPasso(1);
     }
   }, [barbeiros.dados, barbeiroId, passo]);
+
+  // No celular as etapas não cabem: mantém a etapa atual visível.
+  useEffect(() => {
+    const trilho = etapasRef.current;
+    const atual = trilho?.querySelector<HTMLElement>('[aria-current]');
+    if (trilho && atual) {
+      trilho.scrollTo({
+        left: atual.offsetLeft - trilho.clientWidth / 2 + atual.offsetWidth / 2,
+        behavior: 'smooth',
+      });
+    }
+  }, [passo]);
 
   useEffect(() => {
     if (primeiraVez.current) {
@@ -531,7 +544,11 @@ export default function Agendar() {
       />
 
       {/* Etapas */}
-      <nav aria-label="Etapas do agendamento" className="sem-barra -mx-4 overflow-x-auto px-4">
+      <nav
+        ref={etapasRef}
+        aria-label="Etapas do agendamento"
+        className="sem-barra -mx-4 overflow-x-auto px-4"
+      >
         <ol className="flex min-w-max items-center gap-2">
           {PASSOS.map((p, i) => (
             <li key={p} className="flex items-center gap-2">
@@ -630,14 +647,17 @@ export default function Agendar() {
                   >
                     <span className="min-w-0 flex-1">
                       <span className="block font-semibold text-zinc-50">{s.nome}</span>
-                      <span className="mt-0.5 block truncate text-sm text-zinc-400">
+                      <span className="mt-0.5 line-clamp-2 text-sm text-zinc-400 sm:line-clamp-1">
                         {s.descricao}
                       </span>
                       <span className="mt-2 inline-flex items-center gap-1.5 text-xs text-zinc-500">
                         <IconeRelogio width={13} height={13} /> {formatarDuracao(s.duracao_min)}
+                        <span className="ml-2 font-display text-base font-bold text-gold-200 sm:hidden">
+                          {formatarPreco(s.preco)}
+                        </span>
                       </span>
                     </span>
-                    <span className="font-display text-xl font-bold text-gold-200">
+                    <span className="hidden font-display text-xl font-bold text-gold-200 sm:block">
                       {formatarPreco(s.preco)}
                     </span>
                   </Opcao>
@@ -673,7 +693,7 @@ export default function Agendar() {
                             key={b.id}
                             nome={b.nome}
                             foto={b.foto_url}
-                            tamanho="h-11 w-11"
+                            tamanho="h-9 w-9 sm:h-11 sm:w-11"
                             className="ring-2 ring-ink-950"
                           />
                         ))}
@@ -681,7 +701,10 @@ export default function Agendar() {
                       <span>
                         <span className="block font-semibold text-zinc-50">Qualquer barbeiro</span>
                         <span className="text-sm text-zinc-400">
-                          Mais horários: a gente encaixa com quem estiver livre
+                          <span className="sm:hidden">Mais horários livres</span>
+                          <span className="hidden sm:inline">
+                            Mais horários: a gente encaixa com quem estiver livre
+                          </span>
                         </span>
                       </span>
                     </Opcao>
@@ -757,7 +780,7 @@ export default function Agendar() {
             )}
 
             {passo === 4 && (
-              <form onSubmit={enviar} className="card space-y-5 p-6 sm:p-8" noValidate>
+              <form onSubmit={enviar} className="card space-y-5 p-5 sm:p-8" noValidate>
                 <div>
                   <label htmlFor="nome" className="mb-2 block text-sm font-medium text-zinc-200">
                     Seu nome
@@ -842,7 +865,7 @@ export default function Agendar() {
                 </label>
                 <button
                   type="submit"
-                  className="btn-gold w-full py-4 text-base"
+                  className="btn-gold w-full py-4 text-sm whitespace-nowrap sm:text-base"
                   disabled={!podeEnviar}
                 >
                   {enviando ? (
