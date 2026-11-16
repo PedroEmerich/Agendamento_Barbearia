@@ -32,7 +32,8 @@ Para publicar a demonstração há duas opções, sem variáveis de ambiente:
 
 ### Contas e login
 
-Um botão **Entrar** no topo serve para todos (e-mail e senha, com "Manter conectado"):
+Um botão **Entrar** no topo serve para todos (e-mail e senha, com "Manter conectado"). Na tela de
+login, "Ainda não tem conta? **Criar conta**" gira o card em 3D e mostra o cadastro no verso:
 equipe vai para o **painel**; cliente vai para **Minha conta** (`/minha-conta`), com o plano (se
 for assinante), os próximos horários, o histórico e os dados. Para agendar ou assinar, o cliente cria
 a conta no próprio último passo (nome, WhatsApp, e-mail e senha) ou entra, se já tiver. O painel
