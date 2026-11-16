@@ -13,8 +13,11 @@ npm test
 npm run build
 ```
 
-Para publicar a demonstração, importe o repositório na Vercel (framework Vite); não precisa de
-variáveis de ambiente.
+Para publicar a demonstração há duas opções, sem variáveis de ambiente:
+
+- **GitHub Pages:** em *Settings → Pages → Source*, escolha **GitHub Actions**. O workflow
+  `.github/workflows/pages.yml` compila e publica a cada push na `main`.
+- **Vercel:** importe o repositório (framework Vite).
 
 ## O que dá para ver
 
