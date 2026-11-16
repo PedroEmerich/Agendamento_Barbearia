@@ -18,7 +18,6 @@ import {
   IconeRelogio,
   IconeSeta,
   IconeWhatsapp,
-  Marca,
   SeloGiratorio,
   Skeletons,
 } from '../../components/ui';
@@ -131,10 +130,9 @@ function ProximoHorario() {
 
 /* ----------------------------------------------------------------- hero */
 
-const LETRAS = 'UNDERGROUND'.split('');
-// Cabe numa linha só: a palavra ocupa ~8,7em em Cinzel Black.
-const LETREIRO =
-  'font-display text-[clamp(2rem,10.2vw,8.25rem)] leading-[0.95] font-black tracking-tight whitespace-nowrap';
+const MARCA = `${import.meta.env.BASE_URL}marca/`;
+const mascaraCursor =
+  'radial-gradient(circle 150px at var(--tx, -50%) var(--ty, 50%), #000, transparent)';
 
 function Hero() {
   const y = useScrollY();
@@ -145,8 +143,15 @@ function Hero() {
     const el = titulo.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    el.style.setProperty('--tx', `${((e.clientX - r.left) / r.width) * 100}%`);
-    el.style.setProperty('--ty', `${((e.clientY - r.top) / r.height) * 100}%`);
+    const nome = el.lastElementChild!.getBoundingClientRect();
+    el.style.setProperty('--tx', `${e.clientX - nome.left}px`);
+    el.style.setProperty('--ty', `${e.clientY - nome.top}px`);
+    // O leão se inclina na direção do cursor.
+    const dx = (e.clientX - (r.left + r.width / 2)) / innerWidth;
+    const dy = (e.clientY - (r.top + r.height / 2)) / innerHeight;
+    el.style.setProperty('--lx', `${dx * 24}px`);
+    el.style.setProperty('--ly', `${dy * 16}px`);
+    el.style.setProperty('--lr', `${dx * 6}deg`);
   }
 
   const sumir = Math.min(1, y / 600);
@@ -173,37 +178,33 @@ function Hero() {
       >
         <p className="eyebrow animate-entrar justify-center before:hidden">Mogi das Cruzes · SP</p>
 
-        <div ref={titulo} className="relative mt-6 select-none" aria-hidden="true">
-          <p className={`${LETREIRO} relative`}>
-            {LETRAS.map((l, i) => (
-              <span
-                key={i}
-                className="texto-ouro inline-block animate-entrar"
-                style={{ animationDelay: `${120 + i * 45}ms` }}
-              >
-                {l}
-              </span>
-            ))}
-            {/* Camada de brilho: mesmas letras, mascaradas pela posição do cursor (só com mouse). */}
-            <span
-              className="pointer-events-none absolute inset-0 hidden text-gold-100 [@media(hover:hover)]:block"
+        <div ref={titulo} className="relative mt-8 select-none" aria-hidden="true">
+          {/* Leão: entra com zoom, tem um halo pulsando e acompanha o mouse de leve */}
+          <div className="relative mx-auto w-[clamp(6.5rem,19vh,11rem)] animate-entrar [animation-delay:100ms]">
+            <div className="absolute inset-[-30%] animate-pulse rounded-full bg-gold-400/25 blur-3xl [animation-duration:4s]" />
+            <img
+              src={`${MARCA}leao.webp`}
+              alt=""
+              width={360}
+              height={397}
+              className="relative w-full drop-shadow-[0_10px_30px_rgb(212_169_78/0.35)] transition-transform duration-700 ease-(--ease-suave)"
               style={{
-                WebkitMaskImage:
-                  'radial-gradient(circle 180px at var(--tx, -50%) var(--ty, 50%), #000, transparent)',
-                maskImage:
-                  'radial-gradient(circle 180px at var(--tx, -50%) var(--ty, 50%), #000, transparent)',
+                transform: 'translate(var(--lx, 0px), var(--ly, 0px)) rotate(var(--lr, 0deg))',
               }}
-            >
-              {LETRAS.map((l, i) => (
-                <span key={i} className="inline-block">
-                  {l}
-                </span>
-              ))}
-            </span>
-          </p>
-          <p className="mt-3 animate-entrar text-[clamp(0.7rem,2.4vw,1.15rem)] font-medium tracking-[1em] text-gold-400/80 [animation-delay:700ms]">
-            BARBERSHOP
-          </p>
+            />
+          </div>
+          {/* Nome: a camada de cima é a mesma imagem mais clara, revelada onde o cursor está */}
+          <div className="relative mx-auto mt-5 w-[min(90vw,36rem)] animate-entrar [animation-delay:350ms]">
+            <img src={`${MARCA}nome.webp`} alt="" width={900} height={312} className="w-full" />
+            <img
+              src={`${MARCA}nome.webp`}
+              alt=""
+              width={900}
+              height={312}
+              className="pointer-events-none absolute inset-0 hidden w-full brightness-[1.9] saturate-150 [@media(hover:hover)]:block"
+              style={{ WebkitMaskImage: mascaraCursor, maskImage: mascaraCursor }}
+            />
+          </div>
         </div>
         <h1 className="sr-only">Underground Barbershop — agendamento online</h1>
 
@@ -764,7 +765,14 @@ export default function Home() {
 
       <footer className="relative z-10 border-t border-white/[0.06] px-4 py-12">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-6 text-sm text-zinc-500 sm:flex-row">
-          <Marca />
+          <img
+            src={`${MARCA}logo.webp`}
+            alt="Underground Barbershop"
+            width={900}
+            height={635}
+            loading="lazy"
+            className="w-44"
+          />
           {c && (
             <p className="text-center">
               {c.instagram_usuario} · {formatarTelefone(c.telefone_contato)}

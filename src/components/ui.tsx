@@ -87,20 +87,31 @@ export const IconeCalendario = (p: IconeProps) => (
   </Svg>
 );
 
-export function Marca({ tamanho = 'md' }: { tamanho?: 'md' | 'lg' }) {
-  const grande = tamanho === 'lg';
+const MARCA = `${import.meta.env.BASE_URL}marca/`;
+
+/** Logo: leão + nome lado a lado (cabeçalhos) ou a logo completa empilhada. */
+export function Marca({ variante = 'linha' }: { variante?: 'linha' | 'completa' }) {
+  if (variante === 'completa') {
+    return (
+      <img
+        src={`${MARCA}logo.webp`}
+        alt="Underground Barbershop"
+        width={900}
+        height={635}
+        className="mx-auto w-52"
+      />
+    );
+  }
   return (
-    <span className="inline-flex flex-col items-center leading-none">
-      <span
-        className={`texto-ouro font-display font-black tracking-wider ${grande ? 'text-[clamp(2rem,9.5vw,5.5rem)]' : 'text-lg'}`}
-      >
-        UNDERGROUND
-      </span>
-      <span
-        className={`font-medium text-gold-400/80 ${grande ? 'mt-2 text-[clamp(0.65rem,2.6vw,1rem)] tracking-[0.9em] pl-[0.9em]' : 'mt-0.5 text-[0.5rem] tracking-[0.55em] pl-[0.55em]'}`}
-      >
-        BARBERSHOP
-      </span>
+    <span className="inline-flex items-center gap-2.5">
+      <img src={`${MARCA}leao.webp`} alt="" width={360} height={397} className="h-10 w-auto" />
+      <img
+        src={`${MARCA}nome.webp`}
+        alt="Underground Barbershop"
+        width={900}
+        height={312}
+        className="h-9 w-auto sm:h-10"
+      />
     </span>
   );
 }
@@ -192,10 +203,7 @@ export function FotoBarbeiro({
 /** Selo circular com texto girando em volta. */
 export function SeloGiratorio({ texto, className = '' }: { texto: string; className?: string }) {
   return (
-    <span
-      className={`relative items-center justify-center ${className}`}
-      aria-hidden="true"
-    >
+    <span className={`relative items-center justify-center ${className}`} aria-hidden="true">
       <svg viewBox="0 0 120 120" className="absolute inset-0 h-full w-full animate-girar">
         <defs>
           <path id="selo-circulo" d="M60,60 m-46,0 a46,46 0 1,1 92,0 a46,46 0 1,1 -92,0" />

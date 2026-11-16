@@ -37,6 +37,9 @@ provisórios. Endereço, WhatsApp e Instagram vieram do perfil da barbearia.
 Barbeiros, na ordem do site: Davi, Renato e Renan. As fotos ficam em `public/barbeiros/`
 (`davi.webp`, `renato.webp`, `renan.webp`, 480×480); para trocar uma foto basta substituir o arquivo.
 
+A logo fica em `public/marca/` com fundo transparente: `logo.webp` (completa), `leao.webp` e
+`nome.webp` (partes usadas no cabeçalho e no topo da página) e `icone.png` (ícone do site).
+
 ## Próximas fases
 
 Planilha + Apps Script, proxy na Vercel, painel completo e WhatsApp, conforme a especificação.
