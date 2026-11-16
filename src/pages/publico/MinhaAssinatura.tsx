@@ -374,8 +374,22 @@ function PagarPlano({
 
 /* ------------------------------------------------------------------ página */
 
+/** Link pessoal antigo (/assinatura/:token) continua funcionando. */
 export default function MinhaAssinatura() {
   const { token = '' } = useParams();
+  return <PainelAssinatura token={token} />;
+}
+
+/**
+ * Painel do plano. `incorporado`: dentro de "Minha conta" (sem o cabeçalho da página).
+ */
+export function PainelAssinatura({
+  token,
+  incorporado = false,
+}: {
+  token: string;
+  incorporado?: boolean;
+}) {
   const consulta = useConsulta(() => api.getAssinaturaPorToken(token), [token]);
   const [modal, setModal] = useState<{ trocando: Proximo | null } | null>(null);
   const [liberando, setLiberando] = useState<string | null>(null);
@@ -423,16 +437,19 @@ export default function MinhaAssinatura() {
   const fimCiclo = formatarDataCurta(a.ciclo.ate);
 
   return (
-    <div className="relative mx-auto max-w-2xl px-4 pt-4 pb-16">
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -top-20 left-1/2 -z-10 h-72 w-72 -translate-x-1/2 rounded-full bg-gold-500/15 blur-[100px]"
-      />
-
-      <p className="eyebrow">Minha assinatura</p>
-      <h1 className="titulo mt-3">
-        Olá, <span className="texto-ouro">{a.cliente_nome.split(' ')[0]}</span>
-      </h1>
+    <div className={incorporado ? 'relative' : 'relative mx-auto max-w-2xl px-4 pt-4 pb-16'}>
+      {!incorporado && (
+        <>
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -top-20 left-1/2 -z-10 h-72 w-72 -translate-x-1/2 rounded-full bg-gold-500/15 blur-[100px]"
+          />
+          <p className="eyebrow">Minha assinatura</p>
+          <h1 className="titulo mt-3">
+            Olá, <span className="texto-ouro">{a.cliente_nome.split(' ')[0]}</span>
+          </h1>
+        </>
+      )}
 
       {aviso && (
         <p
@@ -635,12 +652,15 @@ export default function MinhaAssinatura() {
         </ul>
       </section>
 
-      <p className="mt-6 text-center text-xs text-zinc-500">
-        Guarde este link: é por ele que você gerencia seu plano.{' '}
-        <Link to="/" className="underline">
-          Underground Barbershop
-        </Link>
-      </p>
+      {!incorporado && (
+        <p className="mt-6 text-center text-xs text-zinc-500">
+          Tudo isso também fica na sua conta:{' '}
+          <Link to="/entrar" className="underline">
+            entre com seu e-mail e senha
+          </Link>
+          .
+        </p>
+      )}
 
       {modal && (
         <EscolherHorario

@@ -923,8 +923,8 @@ export default function Home() {
             <Link to="/privacidade" className="hover:text-gold-300">
               Privacidade
             </Link>
-            <Link to="/admin/login" className="hover:text-gold-300">
-              Área do barbeiro
+            <Link to="/entrar" className="hover:text-gold-300">
+              Entrar
             </Link>
           </p>
         </div>
