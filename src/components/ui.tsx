@@ -92,12 +92,12 @@ export function Marca({ tamanho = 'md' }: { tamanho?: 'md' | 'lg' }) {
   return (
     <span className="inline-flex flex-col items-center leading-none">
       <span
-        className={`texto-ouro font-display font-black tracking-wider ${grande ? 'text-[clamp(2.25rem,11vw,5.500rem)]' : 'text-lg'}`}
+        className={`texto-ouro font-display font-black tracking-wider ${grande ? 'text-[clamp(2rem,9.5vw,5.5rem)]' : 'text-lg'}`}
       >
         UNDERGROUND
       </span>
       <span
-        className={`font-medium text-gold-400/80 ${grande ? 'mt-2 text-[clamp(0.65rem,2.600vw,1rem)] tracking-[0.9em] pl-[0.9em]' : 'mt-0.5 text-[0.5rem] tracking-[0.55em] pl-[0.55em]'}`}
+        className={`font-medium text-gold-400/80 ${grande ? 'mt-2 text-[clamp(0.65rem,2.6vw,1rem)] tracking-[0.9em] pl-[0.9em]' : 'mt-0.5 text-[0.5rem] tracking-[0.55em] pl-[0.55em]'}`}
       >
         BARBERSHOP
       </span>
