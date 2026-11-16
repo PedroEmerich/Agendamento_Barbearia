@@ -10,7 +10,6 @@ import {
   useLocation,
 } from 'react-router-dom';
 import { Cursor, LuzAmbiente, useScrollY } from '../components/efeitos';
-import { MODO_DEMO } from '../lib/api';
 import Home from '../pages/publico/Home';
 import Agendar from '../pages/publico/Agendar';
 import MeuAgendamento from '../pages/publico/MeuAgendamento';
@@ -37,15 +36,6 @@ function RolarParaOTopo() {
     window.scrollTo(0, 0);
   }, [pathname, hash]);
   return null;
-}
-
-function FaixaDemo() {
-  if (!MODO_DEMO) return null;
-  return (
-    <p className="relative z-50 border-b border-gold-400/20 bg-gold-400/10 px-4 py-1.5 text-center text-[0.7rem] font-medium text-gold-200 backdrop-blur">
-      Versão demonstrativa · os agendamentos ficam só neste aparelho e nenhuma mensagem é enviada.
-    </p>
-  );
 }
 
 const SECOES = [
@@ -203,7 +193,6 @@ function LayoutPublico() {
     <div className="grao relative flex min-h-dvh flex-col">
       <LuzAmbiente />
       <BarraProgresso />
-      <FaixaDemo />
       <Cabecalho />
       <main className={`relative z-10 flex-1 ${naHome ? '' : 'pt-24'}`}>
         <Outlet />
