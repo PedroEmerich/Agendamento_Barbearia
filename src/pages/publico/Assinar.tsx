@@ -1,6 +1,6 @@
 // Contratação do plano pelo cliente: plano, barbeiro, dia fixo (opcional), dados e pagamento.
 
-import { useMemo, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   ESCOLHA_INICIAL,
@@ -12,8 +12,15 @@ import {
 import { ErroCaixa, FotoBarbeiro, IconeCheck, IconeSeta, Skeletons } from '../../components/ui';
 import { api } from '../../lib/api';
 import { DIAS_SEMANA_LONGOS } from '../../lib/assinaturas';
-import { formatarPreco, hhmmParaMin, minParaHhmm } from '../../lib/datas';
-import { mascararTelefone, normalizarTelefone } from '../../lib/telefone';
+import { formatarPreco } from '../../lib/datas';
+import { useConta } from '../../lib/conta';
+import {
+  BlocoConta,
+  CONTA_INICIAL,
+  contaPronta,
+  garantirConta,
+  type DadosConta,
+} from '../../components/Conta';
 import { useConsulta } from '../../lib/useConsulta';
 import type { Cobranca } from '../../types';
 
@@ -22,14 +29,13 @@ export default function Assinar() {
   const planos = useConsulta(api.listarPlanos, []);
   const barbeiros = useConsulta(() => api.listarBarbeiros(), []);
   const config = useConsulta(api.getConfigPublica, []);
-  const servicos = useConsulta(api.listarServicos, []);
 
   const [planoId, setPlanoId] = useState(inicial);
   const [barbeiroId, setBarbeiroId] = useState<string | null>(null);
   const [dia, setDia] = useState<number | null>(null);
   const [hora, setHora] = useState<string | null>(null);
-  const [nome, setNome] = useState('');
-  const [telefone, setTelefone] = useState('');
+  const [conta, setConta] = useState<DadosConta>(CONTA_INICIAL);
+  const { usuario } = useConta();
   const [honeypot, setHoneypot] = useState('');
   const [pagamento, setPagamento] = useState<EscolhaPagamentoValor>({
     ...ESCOLHA_INICIAL,
@@ -45,28 +51,21 @@ export default function Assinar() {
   const [pago, setPago] = useState(false);
 
   const plano = planos.dados?.find((p) => p.id === planoId);
-  const duracao = servicos.dados?.find((s) => s.id === plano?.servico_id)?.duracao_min ?? 30;
 
-  // Horários possíveis para o dia fixo: dentro do expediente e fora da pausa.
-  const horas = useMemo(() => {
-    const h = config.dados?.horario_semana.find((x) => x.dia_semana === dia);
-    if (!h) return [];
-    const lista: string[] = [];
-    const pi = h.pausa_inicio ? hhmmParaMin(h.pausa_inicio) : -1;
-    const pf = h.pausa_fim ? hhmmParaMin(h.pausa_fim) : -1;
-    for (let t = hhmmParaMin(h.abre); t + duracao <= hhmmParaMin(h.fecha); t += 30) {
-      if (pi >= 0 && t < pf && pi < t + duracao) continue;
-      lista.push(minParaHhmm(t));
-    }
-    return lista;
-  }, [config.dados, dia, duracao]);
+  // Horários que ainda podem ser dia fixo: o servidor tira expediente, pausa e os dias
+  // fixos que já são de outros assinantes desse barbeiro.
+  const horas = useConsulta(
+    plano && barbeiroId && dia !== null
+      ? () => api.horariosFixosLivres(plano.id, barbeiroId, dia)
+      : null,
+    [plano?.id, barbeiroId, dia],
+  );
 
   const podeEnviar =
     !!plano &&
     !!barbeiroId &&
     (dia === null || !!hora) &&
-    nome.trim().length >= 2 &&
-    normalizarTelefone(telefone) !== null &&
+    contaPronta(conta, usuario) &&
     escolhaValida(pagamento) &&
     !enviando;
 
@@ -76,11 +75,11 @@ export default function Assinar() {
     setEnviando(true);
     setErro(null);
     try {
+      // O plano fica na conta do cliente: cria a conta (ou entra) antes.
+      await garantirConta(conta, usuario);
       const { token } = await api.contratarPlano({
         planoId: plano.id,
         barbeiroId,
-        clienteNome: nome.trim(),
-        clienteTelefone: telefone,
         fixo: dia === null || !hora ? null : { dia_semana: dia, hora },
         formaPagamento: pagamento.forma,
         honeypot,
@@ -135,11 +134,12 @@ export default function Assinar() {
             barbearia.
           </p>
         )}
-        <Link to={`/assinatura/${feito.token}`} className="btn-gold mt-6 w-full py-3.5">
-          Ir para o meu plano <IconeSeta />
+        <Link to="/minha-conta" className="btn-gold mt-6 w-full py-3.5">
+          Ir para minha conta <IconeSeta />
         </Link>
         <p className="mt-4 text-xs text-zinc-500">
-          Guarde este link: é por ele que você troca ou adianta seus horários.
+          Seu plano fica na sua conta: é só tocar em <strong>Entrar</strong> no site, de qualquer
+          aparelho.
         </p>
       </div>
     );
@@ -206,7 +206,10 @@ export default function Assinar() {
                 type="button"
                 role="radio"
                 aria-checked={barbeiroId === b.id}
-                onClick={() => setBarbeiroId(b.id)}
+                onClick={() => {
+                  setBarbeiroId(b.id);
+                  setHora(null);
+                }}
                 className={`card flex cursor-pointer flex-col items-center gap-2 p-4 transition ${barbeiroId === b.id ? '!border-gold-400/70 !bg-gold-400/[0.08]' : 'hover:border-white/20'}`}
               >
                 <FotoBarbeiro nome={b.nome} foto={b.foto_url} tamanho="h-16 w-16 sm:h-20 sm:w-20" />
@@ -249,19 +252,40 @@ export default function Assinar() {
               </button>
             ))}
           </div>
-          {dia !== null && (
-            <div className="grid animate-entrar grid-cols-4 gap-2 sm:grid-cols-6">
-              {horas.map((h) => (
-                <button
-                  key={h}
-                  type="button"
-                  aria-pressed={hora === h}
-                  onClick={() => setHora(h)}
-                  className={`min-h-11 cursor-pointer rounded-2xl border text-sm font-semibold tabular-nums ${hora === h ? 'border-gold-300 bg-gold-400 text-ink-950' : 'border-white/10 bg-white/[0.03] text-zinc-100 hover:border-gold-400/50'}`}
-                >
-                  {h}
-                </button>
-              ))}
+          {dia !== null && !barbeiroId && (
+            <p className="text-sm text-amber-200">
+              Escolha o barbeiro acima para ver os horários livres.
+            </p>
+          )}
+          {dia !== null && barbeiroId && (
+            <div className="animate-entrar">
+              {horas.carregando ? (
+                <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+                  <Skeletons n={8} className="h-11" />
+                </div>
+              ) : horas.dados?.length ? (
+                <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+                  {horas.dados.map((h) => (
+                    <button
+                      key={h}
+                      type="button"
+                      aria-pressed={hora === h}
+                      onClick={() => setHora(h)}
+                      className={`min-h-11 cursor-pointer rounded-2xl border text-sm font-semibold tabular-nums ${hora === h ? 'border-gold-300 bg-gold-400 text-ink-950' : 'border-white/10 bg-white/[0.03] text-zinc-100 hover:border-gold-400/50'}`}
+                    >
+                      {h}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-zinc-400">
+                  Esse barbeiro não tem mais horário fixo livre nesse dia. Tente outro dia ou siga
+                  sem dia fixo.
+                </p>
+              )}
+              <p className="mt-2 text-xs text-zinc-500">
+                Só aparecem os horários que ainda não são de outro assinante.
+              </p>
             </div>
           )}
         </section>
@@ -269,30 +293,7 @@ export default function Assinar() {
         <section className="space-y-4">
           {passoTitulo(4, 'Seus dados e pagamento')}
           <div className="card space-y-5 p-5 sm:p-6">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block text-sm">
-                <span className="mb-1.5 block text-zinc-300">Seu nome</span>
-                <input
-                  className="campo"
-                  value={nome}
-                  onChange={(e) => setNome(e.target.value)}
-                  maxLength={60}
-                  autoComplete="name"
-                />
-              </label>
-              <label className="block text-sm">
-                <span className="mb-1.5 block text-zinc-300">WhatsApp</span>
-                <input
-                  className="campo"
-                  type="tel"
-                  inputMode="numeric"
-                  placeholder="(11) 98765-4321"
-                  value={telefone}
-                  onChange={(e) => setTelefone(mascararTelefone(e.target.value))}
-                  autoComplete="tel-national"
-                />
-              </label>
-            </div>
+            <BlocoConta valor={conta} onMudar={setConta} />
             <div className="hidden" aria-hidden="true">
               <input
                 tabIndex={-1}
