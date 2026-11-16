@@ -244,7 +244,7 @@ function Confirmacao({ agendamento: a }: { agendamento: AgendamentoCliente }) {
 
 /* -------------------------------------------------------- carrossel de dias */
 
-function CarrosselDias({
+export function CarrosselDias({
   hoje,
   janela,
   livres,
@@ -335,7 +335,7 @@ function CarrosselDias({
 
 /* ---------------------------------------------------------- grade de horas */
 
-function GradeHorarios({
+export function GradeHorarios({
   horarios,
   selecionada,
   onEscolher,

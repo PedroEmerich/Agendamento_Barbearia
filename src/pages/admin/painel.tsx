@@ -72,6 +72,11 @@ export const IconeSair = (p: SVGProps<SVGSVGElement>) => (
     <path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M15 12H3" />
   </Svg>
 );
+export const IconeCoroa = (p: SVGProps<SVGSVGElement>) => (
+  <Svg {...p}>
+    <path d="M3 7l4.5 4L12 4l4.5 7L21 7l-2 12H5Z" />
+  </Svg>
+);
 export const IconeDownload = (p: SVGProps<SVGSVGElement>) => (
   <Svg {...p}>
     <path d="M12 3v12M7 10l5 5 5-5M4 21h16" />
@@ -81,6 +86,7 @@ export const IconeDownload = (p: SVGProps<SVGSVGElement>) => (
 const NAV = [
   { para: '/admin', rotulo: 'Início', Icone: IconeInicio, fim: true },
   { para: '/admin/agenda', rotulo: 'Agenda', Icone: IconeAgenda, fim: false },
+  { para: '/admin/assinantes', rotulo: 'Assinantes', Icone: IconeCoroa, fim: false },
   { para: '/admin/relatorios', rotulo: 'Relatórios', Icone: IconeRelatorio, fim: false },
 ];
 
@@ -139,11 +145,14 @@ export function CartaoAgendamento({
           </p>
           <p className="truncate font-semibold text-zinc-50">{a.cliente_nome}</p>
           <p className="text-sm text-zinc-400">
-            {a.servico_nome} · {formatarPreco(a.preco)}
+            {a.servico_nome} · {a.assinatura_id ? 'Plano' : formatarPreco(a.preco)}
             {barbeiro && <> · {barbeiro.nome}</>}
           </p>
         </div>
-        <SeloStatus status={a.status} />
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <SeloStatus status={a.status} />
+          {a.assinatura_id && <SeloPlano />}
+        </div>
       </div>
       {a.observacao && <p className="mt-2 text-sm text-zinc-400 italic">“{a.observacao}”</p>}
       <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -177,6 +186,15 @@ export function CartaoAgendamento({
         </a>
       </div>
     </li>
+  );
+}
+
+/** Selo de assinante (coroa + "Plano"). */
+export function SeloPlano() {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-gold-400/50 bg-gold-400/15 px-2 py-0.5 text-[0.7rem] font-semibold text-gold-100">
+      <IconeCoroa width={12} height={12} /> Plano
+    </span>
   );
 }
 
@@ -402,7 +420,7 @@ export default function LayoutPainel() {
       {/* Navegação inferior (celular) */}
       <nav
         aria-label="Painel"
-        className="vidro fixed inset-x-3 bottom-3 z-30 grid grid-cols-3 rounded-3xl !bg-ink-950/75 p-1.5 lg:hidden"
+        className="vidro fixed inset-x-3 bottom-3 z-30 grid grid-cols-4 rounded-3xl !bg-ink-950/75 p-1.5 lg:hidden"
       >
         {NAV.map(({ para, rotulo, Icone, fim }) => (
           <NavLink

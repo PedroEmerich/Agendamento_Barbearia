@@ -12,6 +12,7 @@ import {
 import {
   ErroCaixa,
   FotoBarbeiro,
+  IconeCheck,
   IconeEstrela,
   IconeInstagram,
   IconePin,
@@ -427,6 +428,119 @@ function Equipe() {
   );
 }
 
+/* --------------------------------------------------------------- planos */
+
+const VANTAGENS = [
+  'Prioridade na agenda: marque com até 45 dias de antecedência',
+  'Dia fixo na semana já reservado para você (opcional)',
+  'Troque, adiante ou pule uma semana pelo celular',
+];
+
+function Planos() {
+  const planos = useConsulta(api.listarPlanos, []);
+  const config = useConsulta(api.getConfigPublica, []);
+  const destaque = 'p2';
+  return (
+    <section id="planos" className="relative scroll-mt-20 overflow-hidden py-16 sm:py-32">
+      <div
+        aria-hidden="true"
+        className="absolute inset-x-0 top-1/2 -z-10 h-80 -translate-y-1/2 bg-gold-500/10 blur-[140px]"
+      />
+      <div className="mx-auto max-w-6xl px-4">
+        <Cabeca
+          centro
+          eyebrow="Assinatura"
+          titulo={
+            <>
+              Seu visual <span className="texto-ouro">sempre em dia</span>
+            </>
+          }
+        >
+          Assine e garanta seus cortes do mês por um valor menor, com horário reservado e liberdade
+          para trocar quando precisar.
+        </Cabeca>
+
+        <ul className="mt-12 grid items-stretch gap-4 md:grid-cols-3">
+          {planos.carregando && <Skeletons n={3} className="h-96" />}
+          {planos.dados?.map((p, i) => {
+            const top = p.id === destaque;
+            const msg = encodeURIComponent(`Olá! Quero assinar o ${p.nome} da Underground.`);
+            return (
+              <Revelar como="li" key={p.id} atraso={i * 100} className="min-w-0">
+                <Inclinar
+                  graus={4}
+                  className={`card group relative flex h-full flex-col p-7 ${top ? '!border-gold-400/60 shadow-[0_0_60px_-20px_#d4a94e]' : ''}`}
+                >
+                  {top && (
+                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-b from-gold-300 to-gold-500 px-3 py-1 text-[0.7rem] font-bold tracking-wider whitespace-nowrap text-ink-950 uppercase">
+                      Mais escolhido
+                    </span>
+                  )}
+                  <p className="font-display text-2xl font-bold text-zinc-50">
+                    {p.nome.replace('Plano ', '')}
+                  </p>
+                  <p className="mt-1 text-sm text-zinc-400">{p.descricao}</p>
+                  <p className="mt-6 flex items-baseline gap-1">
+                    <span className="texto-ouro font-display text-5xl font-black">
+                      {formatarPreco(p.preco_mensal).replace(',00', '')}
+                    </span>
+                    <span className="text-zinc-400">/mês</span>
+                  </p>
+                  <p className="mt-2 text-sm">
+                    <span className="text-zinc-500 line-through">
+                      {formatarPreco(p.preco_avulso_mes)}
+                    </span>{' '}
+                    <span className="font-semibold text-emerald-300">
+                      economize {formatarPreco(p.preco_avulso_mes - p.preco_mensal)}
+                    </span>
+                  </p>
+                  <ul className="mt-6 space-y-3 text-sm text-zinc-300">
+                    <li className="flex gap-2.5">
+                      <IconeCheck
+                        width={16}
+                        height={16}
+                        className="mt-0.5 shrink-0 text-gold-300"
+                      />
+                      {p.creditos_mes} atendimentos por mês
+                    </li>
+                    {VANTAGENS.map((v) => (
+                      <li key={v} className="flex gap-2.5">
+                        <IconeCheck
+                          width={16}
+                          height={16}
+                          className="mt-0.5 shrink-0 text-gold-300"
+                        />
+                        {v}
+                      </li>
+                    ))}
+                  </ul>
+                  <a
+                    href={
+                      config.dados
+                        ? `https://wa.me/${config.dados.telefone_contato}?text=${msg}`
+                        : '#'
+                    }
+                    target="_blank"
+                    rel="noreferrer"
+                    data-cursor="Assinar"
+                    className={`${top ? 'btn-gold' : 'btn-ghost'} mt-8 w-full`}
+                  >
+                    Quero assinar
+                  </a>
+                </Inclinar>
+              </Revelar>
+            );
+          })}
+        </ul>
+        <p className="mt-6 text-center text-xs text-zinc-500">
+          A assinatura é feita direto com a barbearia pelo WhatsApp. Depois você recebe o link do
+          seu plano.
+        </p>
+      </div>
+    </section>
+  );
+}
+
 /* -------------------------------------------------------------- números */
 
 function Numeros() {
@@ -789,6 +903,7 @@ export default function Home() {
       </div>
       <Servicos />
       <Equipe />
+      <Planos />
       <Numeros />
       <Espaco />
       <ComoFunciona />

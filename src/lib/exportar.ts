@@ -43,7 +43,7 @@ function indicadores(r: Resumo): [string, string][] {
     ['Comparecimento', pct(r.comparecimento)],
     ['Faturamento', formatarPreco(r.faturamento)],
     ['Previsto (a realizar)', formatarPreco(r.faturamentoPrevisto)],
-    ['Ticket médio', formatarPreco(r.ticketMedio)],
+    ['Ticket médio (avulsos)', formatarPreco(r.ticketMedio)],
   ];
 }
 
@@ -201,7 +201,7 @@ export async function exportarPdf(d: DadosRelatorio): Promise<void> {
       a.servico_nome,
       ...(d.barbeiros ? [d.nomeBarbeiro(a.barbeiro_id)] : []),
       ROTULO_STATUS[a.status],
-      formatarPreco(a.preco),
+      a.assinatura_id ? 'Plano' : formatarPreco(a.preco),
     ]),
     columnStyles: { [d.barbeiros ? 6 : 5]: { halign: 'right' } },
   });
@@ -261,7 +261,8 @@ export async function exportarExcel(d: DadosRelatorio): Promise<void> {
     ['Comparecimento', r.comparecimento ?? '—', '0%'],
     ['Faturamento', r.faturamento, MOEDA],
     ['Previsto (a realizar)', r.faturamentoPrevisto, MOEDA],
-    ['Ticket médio', r.ticketMedio, MOEDA],
+    ['Ticket médio (avulsos)', r.ticketMedio, MOEDA],
+    ['Atendimentos de plano', r.doPlano],
   ];
   for (const [rot, val, fmt] of linhasResumo) {
     const linha = resumo.addRow([rot, val]);
@@ -304,6 +305,7 @@ export async function exportarExcel(d: DadosRelatorio): Promise<void> {
     ...(d.barbeiros ? [{ header: 'Barbeiro', key: 'barbeiro', width: 12 }] : []),
     { header: 'Status', key: 'status', width: 16 },
     { header: 'Origem', key: 'origem', width: 11 },
+    { header: 'Tipo', key: 'tipo', width: 9 },
     { header: 'Valor', key: 'valor', width: 12 },
   ];
   ags.columns = colunas;
@@ -321,6 +323,7 @@ export async function exportarExcel(d: DadosRelatorio): Promise<void> {
       barbeiro: d.nomeBarbeiro(a.barbeiro_id),
       status: ROTULO_STATUS[a.status],
       origem: a.origem === 'CLIENTE' ? 'Site' : 'Balcão',
+      tipo: a.assinatura_id ? 'Plano' : 'Avulso',
       valor: a.preco,
     });
   }

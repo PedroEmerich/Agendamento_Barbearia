@@ -6,8 +6,12 @@ import type {
   AgendamentoPainel,
   Barbeiro,
   CodigoErro,
+  Assinatura,
+  AssinaturaCliente,
+  AssinaturaPainel,
   ConfigPublica,
   Horario,
+  Plano,
   Servico,
   StatusAgendamento,
   Usuario,
@@ -16,6 +20,15 @@ import { calcularSlots, type Intervalo } from './disponibilidade';
 import { agoraSP, diaSemana, hhmmParaMin, minParaHhmm, somarDias } from './datas';
 import { normalizarTelefone } from './telefone';
 import { gerarAgenda, type RegistroSemente } from './semente';
+import {
+  ANTECEDENCIA_TROCA_MIN,
+  cicloDoMes,
+  encaixarNaAgenda,
+  gerarHorariosDoPlano,
+  JANELA_ASSINANTE_DIAS,
+  mesDe,
+  usoNoMes,
+} from './assinaturas';
 
 export class ErroApi extends Error {
   constructor(
@@ -42,7 +55,7 @@ export const CONFIG: ConfigPublica = {
     'https://www.google.com/maps/search/?api=1&query=Underground+Barbershop+Av.+Manoel+Alves+305+Mogi+das+Cruzes',
   logo_url: '',
   intervalo_slot_min: 30,
-  janela_max_dias: 30,
+  janela_max_dias: 21,
   antecedencia_min_cancelamento_min: 120,
   funcionamento: [
     { dias: 'Terça a sexta', horario: '09:30 – 20:00' },
@@ -137,6 +150,78 @@ const USUARIOS: (Usuario & { login: string; senha: string })[] = [
   { id: 'u4', nome: 'Renan', login: 'renan', senha: 'demo', papel: 'BARBEIRO', barbeiro_id: 'b3' },
 ];
 
+export const PLANOS: Plano[] = [
+  {
+    id: 'p1',
+    nome: 'Plano Corte',
+    descricao: '4 cortes por mês, com prioridade na agenda.',
+    servico_id: 's1',
+    creditos_mes: 4,
+    preco_mensal: 150,
+    preco_avulso_mes: 180,
+  },
+  {
+    id: 'p2',
+    nome: 'Plano Corte + Barba',
+    descricao: '4 combos de corte e barba por mês.',
+    servico_id: 's3',
+    creditos_mes: 4,
+    preco_mensal: 250,
+    preco_avulso_mes: 300,
+  },
+  {
+    id: 'p3',
+    nome: 'Plano Barba',
+    descricao: '4 barbas na navalha por mês.',
+    servico_id: 's2',
+    creditos_mes: 4,
+    preco_mensal: 110,
+    preco_avulso_mes: 140,
+  },
+];
+
+/** Assinantes de exemplo; as datas são relativas a hoje para a demonstração não envelhecer. */
+function assinaturasDeExemplo(hoje: string): Assinatura[] {
+  const mesAtual = mesDe(hoje);
+  const mesPassado = mesDe(somarDias(`${mesAtual}-01`, -1));
+  const base = (
+    id: string,
+    nome: string,
+    telefone: string,
+    plano: string,
+    barbeiro: string,
+    fixo: [number, string] | null,
+    diasAtras: number,
+    extra: Partial<Assinatura> = {},
+  ): Assinatura => ({
+    id,
+    token: `assinatura-${id}-demo`,
+    cliente_nome: nome,
+    cliente_telefone: telefone,
+    plano_id: plano,
+    barbeiro_id: barbeiro,
+    fixo: fixo ? { dia_semana: fixo[0], hora: fixo[1] } : null,
+    status: 'ATIVA',
+    inicio: somarDias(hoje, -diasAtras),
+    pago_ate: mesAtual,
+    ...extra,
+  });
+  return [
+    base('a1', 'Marcos Vieira', '5511981112233', 'p1', 'b1', [4, '18:00'], 130),
+    base('a2', 'Thiago Rocha', '5511982223344', 'p2', 'b2', [2, '19:00'], 120),
+    base('a3', 'Felipe Andrade', '5511983334455', 'p1', 'b2', [6, '10:00'], 95),
+    base('a4', 'Gustavo Lima', '5511984445566', 'p1', 'b3', [3, '18:30'], 80),
+    base('a5', 'Rafael Mendes', '5511985556677', 'p2', 'b1', [5, '17:00'], 110),
+    base('a6', 'Bruno Costa', '5511986667788', 'p1', 'b2', null, 70),
+    base('a7', 'Leandro Prado', '5511987778899', 'p3', 'b3', [5, '11:00'], 60, {
+      status: 'ATRASADA',
+      pago_ate: mesPassado,
+    }),
+    base('a8', 'Eduardo Santos', '5511988889900', 'p1', 'b1', null, 100, { status: 'PAUSADA' }),
+    base('a9', 'Samuel Teixeira', '5511989990011', 'p2', 'b2', [4, '10:00'], 50),
+  ];
+}
+
 // ---------------------------------------------------------------- persistência
 
 type Registro = RegistroSemente;
@@ -149,9 +234,14 @@ const CHAVE = 'ug_demo_v3';
 interface Salvo {
   criados: Registro[];
   status: Record<string, StatusAgendamento>;
+  /** Assinaturas cadastradas no painel. */
+  assinaturas?: Assinatura[];
+  /** Mudanças nas assinaturas de exemplo (status, pagamento, dia fixo). */
+  alteracoesAssinatura?: Record<string, Partial<Assinatura>>;
 }
 let memoria: Registro[] | null = null;
 let salvo: Salvo = { criados: [], status: {} };
+let assinaturasMem: Assinatura[] = [];
 
 function aleatorio(tamanho: number, alfabeto: string): string {
   const bytes = new Uint8Array(tamanho);
@@ -181,8 +271,25 @@ function carregar(): Registro[] {
     expediente: EXPEDIENTE,
     intervaloMin: CONFIG.intervalo_slot_min,
   });
-  for (const r of semente) if (salvo.status[r.id]) r.status = salvo.status[r.id];
-  memoria = [...semente, ...salvo.criados];
+  assinaturasMem = [
+    ...assinaturasDeExemplo(agora.data).map((a) => ({
+      ...a,
+      ...salvo.alteracoesAssinatura?.[a.id],
+    })),
+    ...(salvo.assinaturas ?? []),
+  ];
+  // Os horários dos planos entram primeiro: assinante tem prioridade na agenda.
+  const doPlano = gerarHorariosDoPlano({
+    assinaturas: assinaturasMem,
+    planos: PLANOS,
+    servicos: SERVICOS,
+    expediente: EXPEDIENTE,
+    hoje: agora.data,
+    agoraMin: agora.minutos,
+  });
+  const agenda = encaixarNaAgenda(semente, doPlano);
+  for (const r of agenda) if (salvo.status[r.id]) r.status = salvo.status[r.id];
+  memoria = [...agenda, ...salvo.criados];
   return memoria;
 }
 
@@ -196,7 +303,7 @@ function salvar(): void {
 
 function mudarStatus(r: Registro, status: StatusAgendamento) {
   r.status = status;
-  if (r.id.startsWith('s-')) salvo.status[r.id] = status;
+  if (r.id.startsWith('s-') || r.id.startsWith('p-')) salvo.status[r.id] = status;
   salvar();
 }
 
@@ -214,9 +321,14 @@ function buscarServico(id: unknown): Servico {
   return servico;
 }
 
-function slotsDoBarbeiro(barbeiroId: string, data: string, duracaoMin: number): number[] {
+function slotsDoBarbeiro(
+  barbeiroId: string,
+  data: string,
+  duracaoMin: number,
+  janela = CONFIG.janela_max_dias,
+): number[] {
   const agora = agoraSP();
-  if (data < agora.data || data > somarDias(agora.data, CONFIG.janela_max_dias)) return [];
+  if (data < agora.data || data > somarDias(agora.data, janela)) return [];
   const dia = EXPEDIENTE[diaSemana(data)];
   const ocupados = carregar()
     .filter((r) => r.barbeiro_id === barbeiroId && r.data === data && r.status !== 'CANCELADO')
@@ -231,13 +343,18 @@ function slotsDoBarbeiro(barbeiroId: string, data: string, duracaoMin: number): 
   });
 }
 
-function horariosDoDia(servico: Servico, barbeiroId: string, data: string): Horario[] {
+function horariosDoDia(
+  servico: Servico,
+  barbeiroId: string,
+  data: string,
+  janela = CONFIG.janela_max_dias,
+): Horario[] {
   const candidatos = barbeirosDoServico(servico).filter(
     (b) => barbeiroId === 'qualquer' || b.id === barbeiroId,
   );
   const mapa = new Map<number, string[]>();
   for (const b of candidatos) {
-    for (const slot of slotsDoBarbeiro(b.id, data, servico.duracao_min)) {
+    for (const slot of slotsDoBarbeiro(b.id, data, servico.duracao_min, janela)) {
       mapa.set(slot, [...(mapa.get(slot) ?? []), b.id]);
     }
   }
@@ -270,6 +387,9 @@ function paraCliente(r: Registro): AgendamentoCliente {
     cliente_nome: r.cliente_nome,
     status: r.status,
     pode_cancelar: ativo && minutosAte(r) >= CONFIG.antecedencia_min_cancelamento_min,
+    assinatura_token: r.assinatura_id
+      ? assinaturasMem.find((a) => a.id === r.assinatura_id)?.token
+      : undefined,
   };
 }
 
@@ -290,6 +410,143 @@ function autenticar(authToken: unknown): Usuario {
   };
 }
 
+// ---------------------------------------------------------------- planos
+
+function janelaPara(token: unknown): number {
+  if (!token) return CONFIG.janela_max_dias;
+  carregar();
+  const a = assinaturasMem.find((x) => x.token === token);
+  return a && a.status !== 'CANCELADA' ? JANELA_ASSINANTE_DIAS : CONFIG.janela_max_dias;
+}
+
+function assinaturaPorToken(token: unknown): Assinatura {
+  carregar();
+  const a = assinaturasMem.find((x) => x.token === token);
+  if (!a) throw new ErroApi('NAO_ENCONTRADO', 'Assinatura não encontrada.');
+  return a;
+}
+
+function exigirAtiva(a: Assinatura) {
+  if (a.status === 'PAUSADA')
+    throw new ErroApi('PROIBIDO', 'Seu plano está pausado. Fale com a barbearia.');
+  if (a.status === 'CANCELADA') throw new ErroApi('PROIBIDO', 'Este plano foi encerrado.');
+}
+
+const planoDe = (a: Assinatura) => PLANOS.find((x) => x.id === a.plano_id)!;
+
+function horarioDoPlano(a: Assinatura, id: unknown): Registro {
+  const r = carregar().find((x) => x.id === id && x.assinatura_id === a.id);
+  if (!r) throw new ErroApi('NAO_ENCONTRADO', 'Horário não encontrado.');
+  if (r.status !== 'AGENDADO' && r.status !== 'CONFIRMADO') {
+    throw new ErroApi('VALIDACAO', 'Esse horário não pode mais ser alterado.');
+  }
+  return r;
+}
+
+/** Reserva um horário usando crédito do plano no mês da data escolhida. */
+function reservarPeloPlano(
+  a: Assinatura,
+  data: string,
+  hora: string,
+  trocandoId?: string,
+): Registro {
+  const plano = planoDe(a);
+  const servico = buscarServico(plano.servico_id);
+  const slot = horariosDoDia(servico, a.barbeiro_id, data, JANELA_ASSINANTE_DIAS).find(
+    (h) => h.hora === hora,
+  );
+  if (!slot) throw new ErroApi('SLOT_INDISPONIVEL', 'Esse horário acabou de ser ocupado.');
+  const registros = carregar();
+  // Numa troca, o horário antigo deixa de contar (ele será liberado).
+  const uso = usoNoMes(registros, a.id, mesDe(data), plano.creditos_mes, trocandoId);
+  if (uso.livres < 1) {
+    throw new ErroApi(
+      'LIMITE_AGENDAMENTOS',
+      'Os créditos do plano nesse mês já estão todos usados ou marcados.',
+    );
+  }
+  const novo: Registro = {
+    id: `c${novoToken().slice(0, 12)}`,
+    codigo: novoCodigo(),
+    token: novoToken(),
+    barbeiro_id: a.barbeiro_id,
+    servico_nome: servico.nome,
+    duracao_min: servico.duracao_min,
+    preco: 0,
+    data,
+    hora_inicio: hora,
+    hora_fim: minParaHhmm(hhmmParaMin(hora) + servico.duracao_min),
+    cliente_nome: a.cliente_nome,
+    cliente_telefone: a.cliente_telefone,
+    observacao: trocandoId ? 'Remarcado pelo cliente' : '',
+    status: 'AGENDADO',
+    origem: 'CLIENTE',
+    assinatura_id: a.id,
+  };
+  registros.push(novo);
+  salvo.criados.push(novo);
+  salvar();
+  return novo;
+}
+
+function paraAssinaturaCliente(a: Assinatura): AssinaturaCliente {
+  const plano = planoDe(a);
+  const servico = buscarServico(plano.servico_id);
+  const barbeiro = BARBEIROS.find((b) => b.id === a.barbeiro_id)!;
+  const hoje = agoraSP().data;
+  const registros = carregar();
+  const proximos = registros
+    .filter(
+      (r) =>
+        r.assinatura_id === a.id &&
+        (r.status === 'AGENDADO' || r.status === 'CONFIRMADO') &&
+        minutosAte(r) > 0,
+    )
+    .sort((x, y) => (x.data + x.hora_inicio).localeCompare(y.data + y.hora_inicio))
+    .map((r) => ({
+      ...paraCliente(r),
+      id: r.id,
+      pode_trocar: minutosAte(r) >= ANTECEDENCIA_TROCA_MIN,
+    }));
+  return {
+    cliente_nome: a.cliente_nome,
+    plano,
+    servico_nome: servico.nome,
+    barbeiro_id: barbeiro.id,
+    barbeiro_nome: barbeiro.nome,
+    barbeiro_foto: barbeiro.foto_url,
+    fixo: a.fixo,
+    status: a.status,
+    ciclo: cicloDoMes(hoje),
+    creditos: usoNoMes(registros, a.id, mesDe(hoje), plano.creditos_mes),
+    proximos,
+    agenda_ate: somarDias(hoje, JANELA_ASSINANTE_DIAS),
+    antecedencia_troca_min: ANTECEDENCIA_TROCA_MIN,
+  };
+}
+
+function paraAssinaturaPainel(a: Assinatura): AssinaturaPainel {
+  const plano = planoDe(a);
+  const registros = carregar();
+  const proximo = registros
+    .filter(
+      (r) =>
+        r.assinatura_id === a.id &&
+        (r.status === 'AGENDADO' || r.status === 'CONFIRMADO') &&
+        minutosAte(r) > 0,
+    )
+    .sort((x, y) => (x.data + x.hora_inicio).localeCompare(y.data + y.hora_inicio))[0];
+  const uso = usoNoMes(registros, a.id, mesDe(agoraSP().data), plano.creditos_mes);
+  return {
+    ...a,
+    plano_nome: plano.nome,
+    preco_mensal: plano.preco_mensal,
+    creditos_mes: plano.creditos_mes,
+    usados_mes: uso.usados + uso.agendados,
+    proximo: proximo ? { data: proximo.data, hora: proximo.hora_inicio } : null,
+  };
+}
+
 // ---------------------------------------------------------------- ações
 
 type Payload = Record<string, unknown>;
@@ -302,17 +559,132 @@ const acoes: Record<string, (p: Payload, authToken?: string | null) => unknown> 
   listarBarbeiros: (p) =>
     p.servicoId ? barbeirosDoServico(buscarServico(p.servicoId)) : BARBEIROS,
 
+  // Com `assinaturaToken`, a janela é a do assinante (mais longa que a do público).
   getDiasDisponiveis: (p) => {
     const servico = buscarServico(p.servicoId);
+    const janela = janelaPara(p.assinaturaToken);
     const dias: string[] = [];
     for (let d = String(p.de); d <= String(p.ate); d = somarDias(d, 1)) {
-      if (horariosDoDia(servico, String(p.barbeiroId), d).length) dias.push(d);
+      if (horariosDoDia(servico, String(p.barbeiroId), d, janela).length) dias.push(d);
     }
     return dias;
   },
 
   getHorarios: (p) =>
-    horariosDoDia(buscarServico(p.servicoId), String(p.barbeiroId), String(p.data)),
+    horariosDoDia(
+      buscarServico(p.servicoId),
+      String(p.barbeiroId),
+      String(p.data),
+      janelaPara(p.assinaturaToken),
+    ),
+
+  listarPlanos: () => PLANOS,
+
+  getAssinaturaPorToken: (p) => paraAssinaturaCliente(assinaturaPorToken(p.token)),
+
+  /**
+   * Troca um horário do plano por outro (mais cedo ou mais tarde). É uma operação só:
+   * o novo horário é reservado e o antigo liberado juntos, então o crédito nunca se perde.
+   */
+  trocarHorarioAssinatura: (p) => {
+    const a = assinaturaPorToken(p.token);
+    exigirAtiva(a);
+    const antigo = horarioDoPlano(a, p.agendamentoId);
+    if (minutosAte(antigo) < ANTECEDENCIA_TROCA_MIN) {
+      throw new ErroApi(
+        'CANCELAMENTO_FORA_DO_PRAZO',
+        `Trocas vão até ${ANTECEDENCIA_TROCA_MIN / 60}h antes do horário. Fale com a barbearia.`,
+      );
+    }
+    const novo = reservarPeloPlano(a, String(p.data), String(p.hora), antigo.id);
+    mudarStatus(antigo, 'CANCELADO');
+    return paraCliente(novo);
+  },
+
+  /** "Não vou nesta semana": libera o horário e devolve o crédito. */
+  cancelarHorarioAssinatura: (p) => {
+    const a = assinaturaPorToken(p.token);
+    const r = horarioDoPlano(a, p.agendamentoId);
+    if (minutosAte(r) < ANTECEDENCIA_TROCA_MIN) {
+      throw new ErroApi(
+        'CANCELAMENTO_FORA_DO_PRAZO',
+        'Faltam menos de 2h para o horário. Fale com a barbearia.',
+      );
+    }
+    mudarStatus(r, 'CANCELADO');
+    return paraAssinaturaCliente(a);
+  },
+
+  /** Usa um crédito livre do mês num horário escolhido pelo assinante. */
+  agendarComCredito: (p) => {
+    const a = assinaturaPorToken(p.token);
+    exigirAtiva(a);
+    return paraCliente(reservarPeloPlano(a, String(p.data), String(p.hora)));
+  },
+
+  listarAssinaturas: (_p, authToken) => {
+    const usuario = autenticar(authToken);
+    carregar();
+    return assinaturasMem
+      .filter((a) => usuario.papel === 'ADMIN' || a.barbeiro_id === usuario.barbeiro_id)
+      .map(paraAssinaturaPainel);
+  },
+
+  /** Muda status, pagamento ou dia fixo de uma assinatura (admin). */
+  atualizarAssinatura: (p, authToken) => {
+    const usuario = autenticar(authToken);
+    if (usuario.papel !== 'ADMIN')
+      throw new ErroApi('PROIBIDO', 'Só o administrador altera planos.');
+    carregar();
+    const a = assinaturasMem.find((x) => x.id === p.id);
+    if (!a) throw new ErroApi('NAO_ENCONTRADO', 'Assinatura não encontrada.');
+    const mudancas: Partial<Assinatura> = {};
+    if (p.status) mudancas.status = p.status as Assinatura['status'];
+    if (p.pago_ate) mudancas.pago_ate = String(p.pago_ate);
+    if (p.fixo !== undefined) mudancas.fixo = p.fixo as Assinatura['fixo'];
+    const criada = salvo.assinaturas?.find((x) => x.id === a.id);
+    if (criada) Object.assign(criada, mudancas);
+    else
+      salvo.alteracoesAssinatura = {
+        ...salvo.alteracoesAssinatura,
+        [a.id]: { ...salvo.alteracoesAssinatura?.[a.id], ...mudancas },
+      };
+    salvar();
+    memoria = null; // regera os horários do plano com a mudança
+    carregar();
+    return paraAssinaturaPainel(assinaturasMem.find((x) => x.id === a.id)!);
+  },
+
+  criarAssinatura: (p, authToken) => {
+    const usuario = autenticar(authToken);
+    if (usuario.papel !== 'ADMIN') throw new ErroApi('PROIBIDO', 'Só o administrador cria planos.');
+    const nome = String(p.clienteNome ?? '').trim();
+    const telefone = normalizarTelefone(String(p.clienteTelefone ?? ''));
+    if (nome.length < 2) throw new ErroApi('VALIDACAO', 'Informe o nome do cliente.');
+    if (!telefone) throw new ErroApi('VALIDACAO', 'Informe um WhatsApp válido, com DDD.');
+    if (!PLANOS.some((x) => x.id === p.planoId))
+      throw new ErroApi('VALIDACAO', 'Escolha um plano.');
+    if (!BARBEIROS.some((x) => x.id === p.barbeiroId))
+      throw new ErroApi('VALIDACAO', 'Escolha o barbeiro.');
+    const hoje = agoraSP().data;
+    const nova: Assinatura = {
+      id: `n${novoToken().slice(0, 8)}`,
+      token: novoToken(),
+      cliente_nome: nome,
+      cliente_telefone: telefone,
+      plano_id: String(p.planoId),
+      barbeiro_id: String(p.barbeiroId),
+      fixo: (p.fixo as Assinatura['fixo']) ?? null,
+      status: 'ATIVA',
+      inicio: hoje,
+      pago_ate: mesDe(hoje),
+    };
+    salvo.assinaturas = [...(salvo.assinaturas ?? []), nova];
+    salvar();
+    memoria = null;
+    carregar();
+    return paraAssinaturaPainel(assinaturasMem.find((x) => x.id === nova.id)!);
+  },
 
   criarAgendamento: (p) => {
     if (p.honeypot) throw new ErroApi('VALIDACAO', 'Não foi possível concluir.');
