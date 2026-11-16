@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ErroCaixa, SeloStatus, Skeletons } from '../../components/ui';
+import { ErroCaixa, FotoBarbeiro, SeloStatus, Skeletons } from '../../components/ui';
 import { api, ultimoAgendamento } from '../../lib/api';
 import { formatarDataLonga, formatarPreco } from '../../lib/datas';
 import { useConsulta } from '../../lib/useConsulta';
@@ -35,7 +35,8 @@ export default function MeuAgendamento() {
 
   return (
     <div className="mx-auto max-w-md px-4 py-10">
-      <h1 className="titulo">Meu agendamento</h1>
+      <p className="eyebrow">Seu horário</p>
+      <h1 className="titulo mt-3">Meu agendamento</h1>
 
       <div className="mt-6">
         {consulta.carregando && <Skeletons n={1} className="h-64" />}
@@ -50,11 +51,18 @@ export default function MeuAgendamento() {
 
         {a && (
           <>
-            <div className="card p-6">
-              <div className="flex items-start justify-between gap-4">
+            <div className="card animate-entrar p-6">
+              <div className="mb-6 flex items-center gap-4">
+                <FotoBarbeiro nome={a.barbeiro_nome} foto={a.barbeiro_foto} tamanho="h-14 w-14" />
+                <div>
+                  <p className="text-lg font-semibold text-zinc-50">{a.servico_nome}</p>
+                  <p className="text-sm text-zinc-400">com {a.barbeiro_nome}</p>
+                </div>
+              </div>
+              <div className="flex items-start justify-between gap-4 border-t border-white/[0.07] pt-5">
                 <div>
                   <p className="text-xs tracking-widest text-zinc-500 uppercase">Código</p>
-                  <p className="font-display text-2xl font-bold tracking-[0.2em] text-gold-300">
+                  <p className="texto-ouro font-display text-3xl font-black tracking-[0.2em]">
                     {a.codigo}
                   </p>
                 </div>
@@ -110,8 +118,10 @@ export default function MeuAgendamento() {
                 </>
               )}
               {confirmando && (
-                <div className="card border-red-500/30 p-5 text-center">
-                  <p className="text-sm">Cancelar mesmo? O horário volta a ficar livre para outros clientes.</p>
+                <div className="card !border-red-500/30 p-5 text-center">
+                  <p className="text-sm">
+                    Cancelar mesmo? O horário volta a ficar livre para outros clientes.
+                  </p>
                   <div className="mt-4 flex gap-3">
                     <button
                       className="btn-ghost flex-1"

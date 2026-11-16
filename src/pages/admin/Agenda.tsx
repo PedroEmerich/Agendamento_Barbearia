@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { ErroCaixa, IconeWhatsapp, Marca, SeloStatus, Skeletons } from '../../components/ui';
+import {
+  ErroCaixa,
+  FotoBarbeiro,
+  IconeWhatsapp,
+  Marca,
+  SeloStatus,
+  Skeletons,
+} from '../../components/ui';
 import { api, MODO_DEMO, sessao } from '../../lib/api';
 import { agoraSP, formatarDataLonga, formatarPreco, somarDias } from '../../lib/datas';
 import { formatarTelefone } from '../../lib/telefone';
@@ -25,11 +32,26 @@ function Cartao({
 }) {
   const acoes = ACOES.filter((x) => x.de.includes(a.status));
   return (
-    <li className={`card p-4 ${a.status === 'CANCELADO' ? 'opacity-50' : ''}`}>
+    <li
+      className={`card relative overflow-hidden p-4 pl-5 transition hover:border-white/15 ${a.status === 'CANCELADO' ? 'opacity-50' : ''}`}
+    >
+      <span
+        aria-hidden="true"
+        className={`absolute inset-y-3 left-0 w-1 rounded-r-full ${
+          {
+            AGENDADO: 'bg-sky-400',
+            CONFIRMADO: 'bg-emerald-400',
+            CANCELADO: 'bg-red-400',
+            CONCLUIDO: 'bg-zinc-500',
+            NAO_COMPARECEU: 'bg-amber-400',
+          }[a.status]
+        }`}
+      />
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="font-display text-lg font-bold text-gold-300">
-            {a.hora_inicio} <span className="text-sm font-medium text-zinc-500">– {a.hora_fim}</span>
+            {a.hora_inicio}{' '}
+            <span className="text-sm font-medium text-zinc-500">– {a.hora_fim}</span>
           </p>
           <p className="font-semibold text-zinc-50">{a.cliente_nome}</p>
           <p className="text-sm text-zinc-400">
@@ -45,7 +67,7 @@ function Cartao({
             key={x.status}
             disabled={ocupado}
             onClick={() => onMudar(x.status)}
-            className={`min-h-9 cursor-pointer rounded-full border px-3 text-xs font-semibold transition disabled:opacity-40 ${x.status === 'CANCELADO' ? 'border-red-500/40 text-red-300 hover:bg-red-500/10' : 'border-ink-600 text-zinc-200 hover:border-gold-400 hover:text-gold-300'}`}
+            className={`min-h-9 cursor-pointer rounded-full border px-3 text-xs font-semibold transition disabled:opacity-40 ${x.status === 'CANCELADO' ? 'border-red-500/40 text-red-300 hover:bg-red-500/10' : 'border-white/10 bg-white/[0.03] text-zinc-200 hover:border-gold-400 hover:text-gold-300'}`}
           >
             {x.rotulo}
           </button>
@@ -55,7 +77,7 @@ function Cartao({
           target="_blank"
           rel="noreferrer"
           aria-label={`Abrir conversa com ${a.cliente_nome} — ${formatarTelefone(a.cliente_telefone)}`}
-          className="ml-auto flex h-9 w-9 items-center justify-center rounded-full border border-ink-600 text-emerald-300 hover:border-emerald-400"
+          className="ml-auto flex h-9 w-9 items-center justify-center rounded-full border border-white/10 text-emerald-300 hover:border-emerald-400"
         >
           <IconeWhatsapp width={18} height={18} />
         </a>
@@ -107,13 +129,17 @@ export default function Agenda() {
   const ativos = (agenda.dados ?? []).filter((a) => a.status !== 'CANCELADO');
 
   return (
-    <div className="min-h-dvh">
+    <div className="grao relative min-h-dvh">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed -top-40 left-1/2 h-96 w-[60rem] -translate-x-1/2 rounded-full bg-gold-500/10 blur-[120px]"
+      />
       {MODO_DEMO && (
-        <p className="bg-gold-500 px-4 py-1.5 text-center text-xs font-semibold text-ink-950">
-          Painel demonstrativo — dados de exemplo, guardados só neste aparelho.
+        <p className="relative border-b border-gold-400/20 bg-gold-400/10 px-4 py-1.5 text-center text-[0.7rem] font-medium text-gold-200">
+          Painel demonstrativo · dados de exemplo, guardados só neste aparelho.
         </p>
       )}
-      <header className="border-b border-ink-700 bg-ink-900">
+      <header className="vidro sticky top-0 z-20 border-x-0 border-t-0 !bg-ink-950/60">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
           <Marca />
           <div className="flex items-center gap-3 text-sm">
@@ -131,7 +157,7 @@ export default function Agenda() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-6">
+      <main className="relative mx-auto max-w-6xl px-4 py-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="titulo">Agenda do dia</h1>
@@ -188,14 +214,17 @@ export default function Agenda() {
               const itens = agenda.dados!.filter((a) => a.barbeiro_id === b.id);
               return (
                 <section key={b.id} aria-label={`Agenda de ${b.nome}`}>
-                  <h2 className="flex items-center justify-between border-b border-ink-700 pb-2 font-semibold text-zinc-50">
-                    {b.nome}
+                  <h2 className="card flex items-center gap-3 rounded-full p-1.5 pr-4 font-semibold text-zinc-50">
+                    <FotoBarbeiro nome={b.nome} foto={b.foto_url} tamanho="h-10 w-10" />
+                    <span className="flex-1">{b.nome}</span>
                     <span className="text-xs font-normal text-zinc-500">
                       {itens.filter((a) => a.status !== 'CANCELADO').length} atend.
                     </span>
                   </h2>
                   {itens.length === 0 ? (
-                    <p className="py-8 text-center text-sm text-zinc-500">Nenhum horário marcado.</p>
+                    <p className="py-8 text-center text-sm text-zinc-500">
+                      Nenhum horário marcado.
+                    </p>
                   ) : (
                     <ul className="mt-3 space-y-3">
                       {itens.map((a) => (

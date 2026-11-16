@@ -25,7 +25,8 @@ function subtrair(livres: Intervalo[], ocupado: Intervalo): Intervalo[] {
       resultado.push(livre);
       continue;
     }
-    if (ocupado.inicio > livre.inicio) resultado.push({ inicio: livre.inicio, fim: ocupado.inicio });
+    if (ocupado.inicio > livre.inicio)
+      resultado.push({ inicio: livre.inicio, fim: ocupado.inicio });
     if (ocupado.fim < livre.fim) resultado.push({ inicio: ocupado.fim, fim: livre.fim });
   }
   return resultado;
