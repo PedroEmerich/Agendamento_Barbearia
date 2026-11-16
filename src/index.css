@@ -249,3 +249,63 @@ body {
     filter: none;
   }
 }
+
+/* ------------------------------------------------ card que gira (tela de login) */
+
+.virar-cena {
+  perspective: 1800px;
+}
+.virar-miolo {
+  display: grid;
+  transform-style: preserve-3d;
+  transition:
+    transform 0.9s cubic-bezier(0.7, 0, 0.2, 1),
+    height 0.6s var(--ease-suave);
+}
+.virar-miolo.virado {
+  transform: rotateY(180deg);
+}
+.virar-face {
+  grid-area: 1 / 1;
+  align-self: start;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  position: relative;
+  overflow: hidden;
+}
+.virar-verso {
+  transform: rotateY(180deg);
+}
+/* Faixa de luz dourada que atravessa o card enquanto ele gira. */
+.virar-face::after {
+  content: '';
+  position: absolute;
+  inset: -20% -60%;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 40%,
+    rgb(240 220 166 / 0.18) 48%,
+    rgb(240 220 166 / 0.35) 50%,
+    rgb(240 220 166 / 0.18) 52%,
+    transparent 60%
+  );
+  transform: translateX(-60%);
+}
+.virar-miolo.girando .virar-face::after {
+  animation: varrer 0.9s ease-out;
+}
+@keyframes varrer {
+  0% {
+    opacity: 0;
+    transform: translateX(-60%);
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(60%);
+  }
+}
