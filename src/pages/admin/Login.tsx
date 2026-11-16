@@ -33,7 +33,7 @@ export default function Login() {
       </div>
       <form onSubmit={entrar} className="card w-full max-w-sm animate-entrar space-y-5 p-8">
         <div className="text-center">
-          <Marca />
+          <Marca variante="completa" />
           <h1 className="mt-4 text-lg font-semibold text-zinc-50">Área do barbeiro</h1>
         </div>
         {MODO_DEMO && (
