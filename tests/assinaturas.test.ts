@@ -40,8 +40,9 @@ function assinatura(extra: Partial<Assinatura> = {}): Assinatura {
   };
 }
 
-const gerar = (a: Assinatura) =>
+const gerar = (a: Assinatura, simularUso = ['a1']) =>
   gerarHorariosDoPlano({
+    simularUso,
     assinaturas: [a],
     planos,
     servicos,
@@ -77,6 +78,10 @@ describe('horários do plano', () => {
   it('plano pausado não reserva nada no futuro', () => {
     const regs = gerar(assinatura({ status: 'PAUSADA' }));
     expect(regs.some((r) => r.data > '2026-11-16')).toBe(false);
+  });
+
+  it('assinatura real sem dia fixo não ganha horários inventados', () => {
+    expect(gerar(assinatura({ fixo: null }), [])).toEqual([]);
   });
 
   it('sem dia fixo usa os créditos em dias variados, sem passar do limite', () => {

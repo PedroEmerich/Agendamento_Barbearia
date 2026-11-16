@@ -5,6 +5,9 @@ import type {
   AgendamentoCliente,
   AssinaturaCliente,
   AssinaturaPainel,
+  Cobranca,
+  FormaPagamento,
+  MetodoPagamento,
   HorarioFixo,
   Plano,
   StatusAssinatura,
@@ -42,13 +45,17 @@ export const sessao = {
   },
 };
 
-async function chamar<T>(action: string, payload: Record<string, unknown> = {}): Promise<T> {
+async function chamar<T>(
+  action: string,
+  payload: Record<string, unknown> = {},
+  endpoint = '/api/gas',
+): Promise<T> {
   const authToken = sessao.ler();
   if (MODO_DEMO) return chamarMock<T>(action, payload, authToken);
 
   let resposta: Response;
   try {
-    resposta = await fetch('/api/gas', {
+    resposta = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action, payload, authToken }),
@@ -75,6 +82,24 @@ export interface NovoAgendamento {
   clienteTelefone: string;
   observacao?: string;
   honeypot: string;
+  formaPagamento: FormaPagamento;
+  metodoPagamento?: MetodoPagamento;
+}
+
+export interface DadosPagador {
+  metodo: MetodoPagamento;
+  cpf: string;
+  email?: string;
+}
+
+export interface NovaAssinatura {
+  planoId: string;
+  barbeiroId: string;
+  clienteNome: string;
+  clienteTelefone: string;
+  fixo: HorarioFixo | null;
+  formaPagamento: FormaPagamento;
+  honeypot: string;
 }
 
 export const api = {
@@ -91,6 +116,16 @@ export const api = {
   getHorarios: (servicoId: string, barbeiroId: string, data: string, assinaturaToken?: string) =>
     chamar<Horario[]>('getHorarios', { servicoId, barbeiroId, data, assinaturaToken }),
   listarPlanos: () => chamar<Plano[]>('listarPlanos'),
+  contratarPlano: (dados: NovaAssinatura) =>
+    chamar<{ token: string }>('contratarPlano', { ...dados }),
+
+  // Pagamento online: em produção vai para /api/pagamentos (Asaas, no servidor).
+  iniciarPagamento: (tipo: 'agendamento' | 'assinatura', token: string, pagador: DadosPagador) =>
+    chamar<Cobranca>('iniciarPagamento', { tipo, token, ...pagador }, '/api/pagamentos'),
+  consultarPagamento: (id: string) =>
+    chamar<Cobranca>('consultarPagamento', { id }, '/api/pagamentos'),
+  /** Só existe na demonstração (faz o papel do webhook do Asaas). */
+  simularPagamento: (id: string) => chamar<Cobranca>('simularPagamento', { id }),
   getAssinaturaPorToken: (token: string) =>
     chamar<AssinaturaCliente>('getAssinaturaPorToken', { token }),
   trocarHorarioAssinatura: (token: string, agendamentoId: string, data: string, hora: string) =>
