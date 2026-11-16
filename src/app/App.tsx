@@ -1,7 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { BrowserRouter, Link, NavLink, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { Cursor, LuzAmbiente, useScrollY } from '../components/efeitos';
-import { Marca } from '../components/ui';
 import { MODO_DEMO } from '../lib/api';
 import Home from '../pages/publico/Home';
 import Agendar from '../pages/publico/Agendar';
@@ -52,21 +51,79 @@ function BarraProgresso() {
   );
 }
 
+/**
+ * O leão só aparece no cabeçalho quando nenhuma logo grande da página (marcada com
+ * data-marca) está na tela, para a marca nunca aparecer duplicada.
+ */
+function useLogoDaPaginaVisivel() {
+  const { pathname } = useLocation();
+  const [visivel, setVisivel] = useState(true);
+  useEffect(() => {
+    const visiveis = new Set<Element>();
+    let obs: IntersectionObserver | null = null;
+    // Espera a página montar para encontrar as logos.
+    const id = setTimeout(() => {
+      const alvos = document.querySelectorAll('[data-marca]');
+      setVisivel(
+        alvos.length > 0 && [...alvos].some((el) => el.getBoundingClientRect().bottom > 0),
+      );
+      if (!alvos.length) return;
+      obs = new IntersectionObserver(
+        (entradas) => {
+          entradas.forEach((e) =>
+            e.isIntersecting ? visiveis.add(e.target) : visiveis.delete(e.target),
+          );
+          setVisivel(visiveis.size > 0);
+        },
+        // Considera "fora" assim que a logo passa por baixo do cabeçalho.
+        { rootMargin: '-80px 0px 0px 0px' },
+      );
+      alvos.forEach((el) => obs!.observe(el));
+    }, 50);
+    return () => {
+      clearTimeout(id);
+      obs?.disconnect();
+    };
+  }, [pathname]);
+  return visivel;
+}
+
 function Cabecalho() {
   const rolou = useScrollY() > 40;
   const naHome = useLocation().pathname === '/';
+  const mostrarLeao = !useLogoDaPaginaVisivel();
   return (
     // Altura zero: o cabeçalho flutua sobre o conteúdo sem empurrá-lo.
     <div className="sticky top-0 z-40 h-0">
       <header
-        className={`mx-auto flex items-center justify-between gap-4 transition-all duration-500 ease-(--ease-suave) ${
+        className={`mx-auto grid grid-cols-[1fr_auto_1fr] items-center gap-4 transition-all duration-500 ease-(--ease-suave) ${
           rolou
             ? 'vidro mt-3 h-14 w-[calc(100%-1.5rem)] max-w-5xl rounded-full !bg-ink-950/60 px-3 pl-5'
             : 'mt-0 h-20 w-full max-w-6xl border border-transparent px-4 sm:px-6'
         }`}
       >
-        <Link to="/" aria-label="Underground Barbershop — início" className="shrink-0">
-          <Marca />
+        <Link
+          to="/"
+          aria-label="Underground Barbershop — início"
+          aria-hidden={!mostrarLeao}
+          tabIndex={mostrarLeao ? 0 : -1}
+          className={`group relative flex h-10 w-10 items-center justify-center justify-self-start transition-all duration-700 ease-(--ease-suave) ${
+            mostrarLeao
+              ? 'translate-y-0 scale-100 rotate-0 opacity-100 blur-0'
+              : 'pointer-events-none translate-y-6 scale-50 -rotate-12 opacity-0 blur-sm'
+          }`}
+        >
+          <span
+            aria-hidden="true"
+            className="absolute inset-0 rounded-full bg-gold-400/25 blur-md transition group-hover:bg-gold-400/45"
+          />
+          <img
+            src={`${import.meta.env.BASE_URL}marca/leao.webp`}
+            alt=""
+            width={360}
+            height={397}
+            className="relative h-10 w-auto transition duration-500 group-hover:scale-110 group-hover:-rotate-6"
+          />
         </Link>
         <nav aria-label="Seções" className="hidden items-center gap-1 md:flex">
           {SECOES.map(([id, rotulo]) => (
@@ -79,7 +136,10 @@ function Cabecalho() {
             </NavLink>
           ))}
         </nav>
-        <Link to="/agendar" className={`btn-gold ${rolou ? 'min-h-10 px-5' : 'px-6'}`}>
+        <Link
+          to="/agendar"
+          className={`btn-gold col-start-3 justify-self-end ${rolou ? 'min-h-10 px-5' : 'px-6'}`}
+        >
           Agendar
         </Link>
       </header>
