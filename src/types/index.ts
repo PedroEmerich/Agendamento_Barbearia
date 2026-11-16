@@ -1,9 +1,5 @@
 export type StatusAgendamento =
-  | 'AGENDADO'
-  | 'CONFIRMADO'
-  | 'CANCELADO'
-  | 'CONCLUIDO'
-  | 'NAO_COMPARECEU';
+  'AGENDADO' | 'CONFIRMADO' | 'CANCELADO' | 'CONCLUIDO' | 'NAO_COMPARECEU';
 
 export type Papel = 'ADMIN' | 'BARBEIRO';
 
@@ -25,6 +21,8 @@ export interface ConfigPublica {
   janela_max_dias: number;
   antecedencia_min_cancelamento_min: number;
   funcionamento: DiaFuncionamento[];
+  /** Horário de abertura por dia da semana (0 = domingo); dia ausente = fechado. */
+  horario_semana: { dia_semana: number; abre: string; fecha: string }[];
 }
 
 export interface Servico {
@@ -53,6 +51,7 @@ export interface AgendamentoCliente {
   codigo: string;
   token: string;
   barbeiro_nome: string;
+  barbeiro_foto?: string;
   servico_nome: string;
   duracao_min: number;
   preco: number;
