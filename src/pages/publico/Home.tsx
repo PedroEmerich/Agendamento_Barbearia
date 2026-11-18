@@ -1,4 +1,4 @@
-import { useRef, type MouseEvent, type ReactNode } from 'react';
+import { useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Contador,
@@ -35,6 +35,7 @@ import {
 import { formatarTelefone } from '../../lib/telefone';
 import { useConsulta } from '../../lib/useConsulta';
 import type { ConfigPublica } from '../../types';
+import { FOTOS, TODAS_AS_FOTOS, VisualizadorFotos, type Foto } from '../../components/Galeria';
 
 /* ---------------------------------------------------------------- peças */
 
@@ -590,7 +591,55 @@ function Numeros() {
 
 /* --------------------------------------------------------------- espaço */
 
-function Espaco() {
+/** Cartão de "O espaço" com a foto de fundo; tocar abre a foto em tela cheia. */
+function CartaoFoto({
+  foto,
+  posicao = 'center',
+  className,
+  atraso = 0,
+  onAbrir,
+  children,
+}: {
+  foto: Foto;
+  posicao?: string;
+  className: string;
+  atraso?: number;
+  onAbrir: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <Revelar className={className} atraso={atraso}>
+      <Inclinar
+        como="button"
+        type="button"
+        graus={3}
+        onClick={onAbrir}
+        data-cursor="Ver foto"
+        aria-label={`Ver foto: ${foto.alt}`}
+        className="card group relative block h-full w-full cursor-pointer overflow-hidden text-left"
+      >
+        <img
+          src={foto.src}
+          alt=""
+          width={foto.largura}
+          height={foto.altura}
+          loading="lazy"
+          decoding="async"
+          className="absolute inset-0 h-full w-full object-cover transition duration-[1.2s] ease-(--ease-suave) group-hover:scale-110"
+          style={{ objectPosition: posicao }}
+        />
+        <span
+          aria-hidden="true"
+          className="absolute inset-0 bg-gradient-to-t from-ink-950 via-ink-950/55 to-ink-950/5 transition duration-500 group-hover:via-ink-950/40"
+        />
+        <span className="relative flex h-full flex-col justify-end p-4 sm:p-7">{children}</span>
+      </Inclinar>
+    </Revelar>
+  );
+}
+
+function Espaco({ onAbrirFoto }: { onAbrirFoto: (i: number) => void }) {
+  const abrir = (f: Foto) => () => onAbrirFoto(TODAS_AS_FOTOS.indexOf(f));
   return (
     <section id="espaco" className="mx-auto max-w-6xl scroll-mt-20 px-4 py-16 sm:py-32">
       <Cabeca
@@ -605,88 +654,119 @@ function Espaco() {
         para o relógio.
       </Cabeca>
 
-      <div className="mt-10 grid auto-rows-[minmax(9.5rem,auto)] grid-cols-2 gap-3 sm:mt-14 sm:gap-4 md:auto-rows-[minmax(13rem,auto)] md:grid-cols-6">
-        <Revelar className="col-span-2 md:col-span-4">
-          <Inclinar graus={3} className="card group relative h-full overflow-hidden p-6 sm:p-8">
-            <span
-              aria-hidden="true"
-              className="absolute -right-10 -bottom-12 flex h-36 w-36 items-center sm:-bottom-10 sm:h-56 sm:w-56 justify-center rounded-full bg-[radial-gradient(circle_at_35%_30%,#3a3a41,#070708_70%)] shadow-[0_30px_60px_-20px_#000] transition duration-700 group-hover:rotate-12"
-            >
-              <span className="flex h-16 w-16 items-center justify-center rounded-full bg-zinc-100 font-display text-3xl font-black text-ink-950 sm:h-24 sm:w-24 sm:text-5xl">
-                8
+      <div className="mt-10 grid auto-rows-[minmax(12rem,auto)] grid-cols-2 gap-3 sm:mt-14 sm:gap-4 md:auto-rows-[minmax(17rem,auto)] md:grid-cols-6">
+        <CartaoFoto
+          foto={FOTOS.salao}
+          posicao="70% 60%"
+          className="col-span-2 md:col-span-4"
+          onAbrir={abrir(FOTOS.salao)}
+        >
+          <span className="eyebrow">Enquanto espera</span>
+          <span className="mt-2 block font-display text-4xl font-black text-zinc-50 sm:mt-3 sm:text-6xl">
+            Sinuca
+          </span>
+          <span className="mt-2 block max-w-sm text-sm text-zinc-300 sm:text-base">
+            Mesa liberada para quem chega. Desafie o barbeiro — se tiver coragem.
+          </span>
+        </CartaoFoto>
+        <CartaoFoto
+          foto={FOTOS.bar}
+          posicao="75% 40%"
+          className="col-span-1 md:col-span-2"
+          atraso={100}
+          onAbrir={abrir(FOTOS.bar)}
+        >
+          <span className="eyebrow">Por conta da casa</span>
+          <span className="mt-2 block font-display text-2xl leading-tight font-black text-zinc-50 sm:mt-3 sm:text-4xl">
+            Cerveja <span className="texto-ouro">gelada</span>
+          </span>
+        </CartaoFoto>
+        <CartaoFoto
+          foto={FOTOS.balcao}
+          posicao="30% 50%"
+          className="col-span-1 md:col-span-3"
+          atraso={150}
+          onAbrir={abrir(FOTOS.balcao)}
+        >
+          <span className="eyebrow">Sem rótulo</span>
+          <span className="mt-2 block font-display text-2xl leading-tight font-black text-zinc-50 sm:mt-3 sm:text-4xl">
+            Todas as tribos
+          </span>
+          <span className="mt-4 hidden flex-wrap gap-2 sm:flex">
+            {['Social', 'Degradê', 'Navalhado', 'Clássico', 'Freestyle'].map((t) => (
+              <span
+                key={t}
+                className="rounded-full border border-white/15 bg-ink-950/50 px-3 py-1 text-sm text-zinc-200 backdrop-blur"
+              >
+                {t}
               </span>
-            </span>
-            <p className="eyebrow">Enquanto espera</p>
-            <p className="mt-3 font-display text-4xl font-black text-zinc-50 sm:mt-4 sm:text-6xl">
-              Sinuca
-            </p>
-            <p className="mt-3 max-w-[62%] text-zinc-400 sm:max-w-xs">
-              Mesa liberada para quem chega. Desafie o barbeiro — se tiver coragem.
-            </p>
-          </Inclinar>
-        </Revelar>
-        <Revelar className="col-span-1 md:col-span-2" atraso={100}>
-          <Inclinar graus={5} className="card relative h-full overflow-hidden p-4 sm:p-8">
-            <span
-              aria-hidden="true"
-              className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-amber-500/20 to-transparent"
-            />
-            <span aria-hidden="true" className="absolute right-6 bottom-6 flex gap-1.5">
-              {[0, 1, 2, 3].map((i) => (
-                <span
-                  key={i}
-                  className="h-2 w-2 animate-bounce rounded-full bg-gold-200/60"
-                  style={{ animationDelay: `${i * 180}ms`, animationDuration: `${1.4 + i * 0.3}s` }}
-                />
-              ))}
-            </span>
-            <p className="eyebrow">Por conta da casa</p>
-            <p className="mt-3 font-display text-2xl leading-tight font-black text-zinc-50 sm:mt-4 sm:text-4xl">
-              Cerveja <span className="texto-ouro">gelada</span>
-            </p>
-          </Inclinar>
-        </Revelar>
-        <Revelar className="col-span-1 md:col-span-3" atraso={150}>
-          <Inclinar graus={4} className="card h-full overflow-hidden p-4 sm:p-8">
-            <p className="eyebrow">Sem rótulo</p>
-            <p className="mt-3 font-display text-2xl leading-tight font-black text-zinc-50 sm:mt-4 sm:text-4xl">
-              Todas as tribos
-            </p>
-            <div className="mt-4 flex flex-wrap gap-1.5 sm:mt-6 sm:gap-2">
-              {['Social', 'Degradê', 'Navalhado', 'Clássico', 'Freestyle', 'Barba de respeito'].map(
-                (t) => (
-                  <span
-                    key={t}
-                    className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[0.7rem] text-zinc-300 transition hover:border-gold-400/50 hover:text-gold-200 sm:px-3 sm:py-1 sm:text-sm"
-                  >
-                    {t}
-                  </span>
-                ),
-              )}
-            </div>
-          </Inclinar>
-        </Revelar>
-        <Revelar className="col-span-2 md:col-span-3" atraso={200}>
-          <Inclinar
-            graus={4}
-            className="card flex h-full flex-row items-end justify-between gap-4 overflow-hidden p-5 sm:flex-col sm:items-stretch sm:p-8"
-          >
-            <div>
-              <p className="eyebrow">Sem ligação</p>
-              <p className="mt-3 font-display text-3xl font-black text-zinc-50 sm:mt-4 sm:text-4xl">
-                Agenda <span className="texto-ouro">24h</span>
-              </p>
-              <p className="mt-2 text-sm text-zinc-400 sm:mt-3 sm:text-base">
-                E lembrete no WhatsApp duas horas antes.
-              </p>
-            </div>
-            <Link
-              to="/agendar"
-              className="btn-gold shrink-0 self-end whitespace-nowrap sm:mt-6 sm:self-start"
-            >
-              Marcar agora <IconeSeta />
-            </Link>
-          </Inclinar>
+            ))}
+          </span>
+        </CartaoFoto>
+        <CartaoFoto
+          foto={FOTOS.toalha}
+          posicao="50% 40%"
+          className="col-span-2 md:col-span-3"
+          atraso={200}
+          onAbrir={abrir(FOTOS.toalha)}
+        >
+          <span className="eyebrow">Sem ligação</span>
+          <span className="mt-2 block font-display text-3xl font-black text-zinc-50 sm:mt-3 sm:text-4xl">
+            Agenda <span className="texto-ouro">24h</span>
+          </span>
+          <span className="mt-2 block text-sm text-zinc-300 sm:text-base">
+            E lembrete no WhatsApp duas horas antes.
+          </span>
+        </CartaoFoto>
+      </div>
+
+      <Revelar atraso={250} className="mt-6 flex justify-center">
+        <button type="button" onClick={() => onAbrirFoto(0)} className="btn-ghost">
+          Ver todas as fotos do espaço
+        </button>
+      </Revelar>
+    </section>
+  );
+}
+
+/* ----------------------------------------------------------- faixa de foto */
+
+/** Foto grande que se move devagar ao rolar (parallax), entre Serviços e Equipe. */
+function FaixaFoto({ onAbrir }: { onAbrir: () => void }) {
+  const [ref, progresso] = useProgressoScroll<HTMLElement>();
+  const mover =
+    typeof window !== 'undefined' && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const y = mover ? (progresso - 0.5) * 24 : 0; // em %, a imagem é 130% da altura
+  return (
+    <section
+      ref={ref}
+      aria-label="Na cadeira"
+      className="relative h-[60vh] min-h-80 overflow-hidden sm:h-[75vh]"
+    >
+      <img
+        src={FOTOS.barbeiro.src}
+        alt={FOTOS.barbeiro.alt}
+        width={FOTOS.barbeiro.largura}
+        height={FOTOS.barbeiro.altura}
+        loading="lazy"
+        decoding="async"
+        className="absolute inset-x-0 -top-[15%] h-[130%] w-full object-cover"
+        style={{ transform: `translate3d(0, ${y}%, 0)`, objectPosition: '62% 30%' }}
+      />
+      <span
+        aria-hidden="true"
+        className="absolute inset-0 bg-[linear-gradient(to_bottom,#070708_0%,transparent_22%,transparent_60%,#070708_100%),linear-gradient(to_right,rgb(7_7_8/0.85),transparent_65%)]"
+      />
+      <div className="relative mx-auto flex h-full max-w-6xl items-end px-4 pb-14 sm:pb-20">
+        <Revelar>
+          <p className="eyebrow">Na cadeira</p>
+          <p className="mt-4 max-w-xl font-display text-3xl leading-tight font-bold text-zinc-50 sm:text-5xl">
+            Corte de verdade, conversa boa e{' '}
+            <span className="texto-ouro">o tempo que precisar.</span>
+          </p>
+          <button type="button" onClick={onAbrir} className="btn-ghost mt-6" data-cursor="Ver foto">
+            Ver fotos
+          </button>
         </Revelar>
       </div>
     </section>
@@ -722,13 +802,6 @@ function ComoFunciona() {
           >
             Sem fila no direct, sem esperar resposta. O horário que aparece livre é seu.
           </Cabeca>
-          <Revelar atraso={240} className="mt-8">
-            <Magnetico>
-              <Link to="/agendar" className="btn-gold px-8 py-3.5" data-cursor="Bora">
-                Agendar agora <IconeSeta />
-              </Link>
-            </Magnetico>
-          </Revelar>
         </div>
 
         <div ref={ref} className="relative pl-12">
@@ -915,6 +988,7 @@ function ChamadaFinal() {
 export default function Home() {
   const config = useConsulta(api.getConfigPublica, []);
   const c = config.dados;
+  const [foto, setFoto] = useState<number | null>(null);
   return (
     <>
       <Hero />
@@ -927,10 +1001,11 @@ export default function Home() {
         </div>
       </div>
       <Servicos />
+      <FaixaFoto onAbrir={() => setFoto(TODAS_AS_FOTOS.indexOf(FOTOS.barbeiro))} />
       <Equipe />
       <Planos />
       <Numeros />
-      <Espaco />
+      <Espaco onAbrirFoto={setFoto} />
       <ComoFunciona />
       <Local />
       <ChamadaFinal />
@@ -962,6 +1037,15 @@ export default function Home() {
           </p>
         </div>
       </footer>
+
+      {foto !== null && (
+        <VisualizadorFotos
+          fotos={TODAS_AS_FOTOS}
+          indice={foto}
+          onMudar={setFoto}
+          onFechar={() => setFoto(null)}
+        />
+      )}
     </>
   );
 }
