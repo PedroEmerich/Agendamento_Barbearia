@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   BrowserRouter,
   Link,
@@ -97,6 +97,26 @@ function useLogoDaPaginaVisivel() {
 }
 
 /** "Entrar" para quem não está logado; para quem está, atalho para a conta ou o painel. */
+/**
+ * Agendar e assinar exigem conta: sem login, vai para "Entrar" e, depois de entrar ou
+ * criar a conta, volta para a mesma tela (com o serviço/barbeiro/plano já escolhido).
+ */
+function ExigirLogin({ children }: { children: ReactNode }) {
+  const { usuario, carregando } = useConta();
+  const { pathname, search } = useLocation();
+  if (carregando) {
+    return (
+      <div className="mx-auto max-w-xl space-y-4 px-4 py-10" aria-busy="true">
+        <div className="skeleton h-10 w-48" />
+        <div className="skeleton h-64" />
+      </div>
+    );
+  }
+  if (!usuario)
+    return <Navigate to={`/entrar?voltar=${encodeURIComponent(pathname + search)}`} replace />;
+  return <>{children}</>;
+}
+
 function BotaoConta({ compacto }: { compacto: boolean }) {
   const { usuario, carregando } = useConta();
   const { pathname } = useLocation();
@@ -213,11 +233,25 @@ export default function App() {
       <Routes>
         <Route element={<LayoutPublico />}>
           <Route path="/" element={<Home />} />
-          <Route path="/agendar" element={<Agendar />} />
+          <Route
+            path="/agendar"
+            element={
+              <ExigirLogin>
+                <Agendar />
+              </ExigirLogin>
+            }
+          />
           <Route path="/meu-agendamento/:token" element={<MeuAgendamento />} />
           <Route path="/privacidade" element={<Privacidade />} />
           <Route path="/assinatura/:token" element={<MinhaAssinatura />} />
-          <Route path="/assinar/:planoId?" element={<Assinar />} />
+          <Route
+            path="/assinar/:planoId?"
+            element={
+              <ExigirLogin>
+                <Assinar />
+              </ExigirLogin>
+            }
+          />
           <Route path="/minha-conta" element={<MinhaConta />} />
           <Route
             path="*"

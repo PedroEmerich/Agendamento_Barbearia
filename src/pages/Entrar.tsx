@@ -181,7 +181,13 @@ export default function Entrar() {
             lado="entrar"
             ativo={lado === 'entrar'}
             titulo="Bem-vindo de volta"
-            subtitulo="Entre para ver seus horários e seu plano."
+            subtitulo={
+              voltar?.startsWith('/agendar')
+                ? 'Entre (ou crie sua conta) para agendar seu horário.'
+                : voltar?.startsWith('/assinar')
+                  ? 'Entre (ou crie sua conta) para assinar o plano.'
+                  : 'Entre para ver seus horários e seu plano.'
+            }
             dados={dados}
             onMudar={setDados}
             onVirar={virar}
