@@ -178,9 +178,6 @@ function Cabecalho() {
         </nav>
         <span className="col-start-3 flex items-center gap-2 justify-self-end">
           <BotaoConta compacto={rolou} />
-          <Link to="/agendar" className={`btn-gold ${rolou ? 'min-h-10 px-5' : 'px-6'}`}>
-            Agendar
-          </Link>
         </span>
       </header>
     </div>
