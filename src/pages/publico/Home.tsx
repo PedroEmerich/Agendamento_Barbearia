@@ -729,50 +729,6 @@ function Espaco({ onAbrirFoto }: { onAbrirFoto: (i: number) => void }) {
   );
 }
 
-/* ----------------------------------------------------------- faixa de foto */
-
-/** Foto grande que se move devagar ao rolar (parallax), entre Serviços e Equipe. */
-function FaixaFoto({ onAbrir }: { onAbrir: () => void }) {
-  const [ref, progresso] = useProgressoScroll<HTMLElement>();
-  const mover =
-    typeof window !== 'undefined' && !matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const y = mover ? (progresso - 0.5) * 24 : 0; // em %, a imagem é 130% da altura
-  return (
-    <section
-      ref={ref}
-      aria-label="Na cadeira"
-      className="relative h-[60vh] min-h-80 overflow-hidden sm:h-[75vh]"
-    >
-      <img
-        src={FOTOS.barbeiro.src}
-        alt={FOTOS.barbeiro.alt}
-        width={FOTOS.barbeiro.largura}
-        height={FOTOS.barbeiro.altura}
-        loading="lazy"
-        decoding="async"
-        className="absolute inset-x-0 -top-[15%] h-[130%] w-full object-cover"
-        style={{ transform: `translate3d(0, ${y}%, 0)`, objectPosition: '62% 30%' }}
-      />
-      <span
-        aria-hidden="true"
-        className="absolute inset-0 bg-[linear-gradient(to_bottom,#070708_0%,transparent_22%,transparent_60%,#070708_100%),linear-gradient(to_right,rgb(7_7_8/0.85),transparent_65%)]"
-      />
-      <div className="relative mx-auto flex h-full max-w-6xl items-end px-4 pb-14 sm:pb-20">
-        <Revelar>
-          <p className="eyebrow">Na cadeira</p>
-          <p className="mt-4 max-w-xl font-display text-3xl leading-tight font-bold text-zinc-50 sm:text-5xl">
-            Corte de verdade, conversa boa e{' '}
-            <span className="texto-ouro">o tempo que precisar.</span>
-          </p>
-          <button type="button" onClick={onAbrir} className="btn-ghost mt-6" data-cursor="Ver foto">
-            Ver fotos
-          </button>
-        </Revelar>
-      </div>
-    </section>
-  );
-}
-
 /* -------------------------------------------------------- como funciona */
 
 const PASSOS = [
@@ -1001,7 +957,6 @@ export default function Home() {
         </div>
       </div>
       <Servicos />
-      <FaixaFoto onAbrir={() => setFoto(TODAS_AS_FOTOS.indexOf(FOTOS.barbeiro))} />
       <Equipe />
       <Planos />
       <Numeros />
