@@ -1042,9 +1042,11 @@ const acoes: Record<string, (p: Payload, authToken?: string | null) => unknown |
       if (!slot) throw new ErroApi('SLOT_INDISPONIVEL', 'Esse horário acabou de ser ocupado.');
 
       const registros = carregar();
+      // Antispam vale para horários avulsos; os do plano (dia fixo) não contam.
       const futuros = registros.filter(
         (r) =>
           r.cliente_telefone === telefone &&
+          !r.assinatura_id &&
           (r.status === 'AGENDADO' || r.status === 'CONFIRMADO') &&
           minutosAte(r) > 0,
       );
